@@ -1,0 +1,13 @@
+# Use the official PostgreSQL image from the Docker Hub
+FROM postgres:15
+
+# Set environment variables for PostgreSQL
+ENV POSTGRES_USER=vrisa_project
+ENV POSTGRES_PASSWORD=vr!sa2024
+ENV POSTGRES_DB=VRisa
+
+# Copy the SQL scripts into the container
+COPY ./*.sql /docker-entrypoint-initdb.d/
+
+# Expose the default PostgreSQL port
+EXPOSE 5432
