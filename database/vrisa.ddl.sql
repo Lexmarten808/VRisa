@@ -1,22 +1,23 @@
 --------------- usuarios ------------------------
-CREATE TABLE user (
+CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     u_name VARCHAR(50)  NOT NULL,
     last_name VARCHAR(50)  NOT NULL,
     u_password VARCHAR(50) NOT NULL,
     creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- hora de creaccion
-    u_type VARCHAR(20) NOT NULL --tipo de usuario: admin, regular,invitado (super_admin admite nuevos usuarios)
+    u_type VARCHAR(20) NOT NULL, --tipo de usuario: admin, regular,invitado (super_admin admite nuevos usuarios)
+    validated BOOLEAN DEFAULT FALSE
 );
 ----------------- relaciones de contacto ------------------------
 CREATE TABLE email (
     email_id SERIAL PRIMARY KEY,
-    u_id INT REFERENCES user(id),
+    u_id INT REFERENCES users(id),
     email VARCHAR(100) UNIQUE NOT NULL
 );
 
 CREATE TABLE phone_number(
     p_number_id SERIAL PRIMARY KEY,
-    u_id INT REFERENCES user(id),
+    u_id INT REFERENCES users(id),
     p_number VARCHAR(15) UNIQUE NOT NULL
 );
 ---- un usuario puede tener varios emails y numeros de telefono
@@ -30,7 +31,7 @@ CREATE TABLE institution(
     color_set VARCHAR(50),  -- set de colores de la institucion
     street VARCHAR(100),    -- calle
     neighborhood VARCHAR(100), --barrio djanjo no soporta tipos personalizados
-    validado BOOLEAN DEFAULT FALSE
+    validated BOOLEAN DEFAULT FALSE
 );
 
 ------------------ estaciones ------------------------
@@ -41,7 +42,7 @@ CREATE TABLE station(
     lon DECIMAL(9,6) NOT NULL,
     calibration_certificate VARCHAR(100),
     maintenance_date TIMESTAMP,
-    admin_id INT REFERENCES user(id),
+    admin_id INT REFERENCES users(id),
     s_state VARCHAR(20) NOT NULL, -- activo, inactivo, mantenimiento
     institution_id INT REFERENCES institution(institution_id) ON DELETE SET NULL
 );
@@ -51,7 +52,7 @@ CREATE TABLE sensor(
     s_type VARCHAR(50) NOT NULL,
     installment_date TIMESTAMP,
     s_state VARCHAR(20) NOT NULL, -- activo, inactivo, mantenimiento
-    station_id INT REFERENCES station(station_id) ON DELETE RESTRICT,
+    station_id INT REFERENCES station(station_id) ,
     last_calibration_date TIMESTAMP
 );
 ------------------ variables ------------------------
@@ -86,7 +87,7 @@ CREATE TABLE report_log (
     description TEXT,
 
     FOREIGN KEY (report_id) REFERENCES report(report_id) ON DELETE RESTRICT,
-    FOREIGN KEY (institution_id) REFERENCES institution ON DELETE RESTRICT (institution_id)
+    FOREIGN KEY (institution_id) REFERENCES institution (institution_id) ON DELETE RESTRICT 
 );
 ------ se utilizara un trigger para insertar en el log cada vez que se cree un reporte
 -------------------------------------------------------------------------------------

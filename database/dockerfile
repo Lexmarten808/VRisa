@@ -4,7 +4,7 @@ FROM postgres:15
 # Set environment variables for PostgreSQL
 ENV POSTGRES_USER=vrisa_project
 ENV POSTGRES_PASSWORD=vr!sa2024
-ENV POSTGRES_DB=VRisa
+ENV POSTGRES_DB=vrisa
 
 # Copy the SQL scripts into the container
 COPY ./*.sql /docker-entrypoint-initdb.d/
