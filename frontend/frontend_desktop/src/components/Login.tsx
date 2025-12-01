@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -9,13 +10,86 @@ import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Building2, Radio, Info } from 'lucide-react';
 
-interface LoginProps {
-  onLogin: (userType: string) => void;
+
+
+
+interface LoginPayload {
+  u_type: string;
+  user_id?: number;
+  name?: string;
+  last_name?: string;
+  email?: string;
 }
+interface LoginProps {
+  onLogin: (payload: LoginPayload) => void;
+}
+
 
 export function Login({ onLogin }: LoginProps) {
   const [isRegistering, setIsRegistering] = useState(false);
-  const [registrationType, setRegistrationType] = useState<'institution' | 'station'>('institution');
+  const [registrationType, setRegistrationType] = useState<'institution' | 'station' | 'user'>('user');
+  const [regError, setRegError] = useState<string>('');
+  const [regLoading, setRegLoading] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginLoading(true);
+    const emailInput = loginEmail.trim();
+    const passwordInput = loginPassword;
+    try {
+      const response = await axios.post('http://127.0.0.1:8000/api/users/login/', {
+        identifier: emailInput,
+        password: passwordInput,
+      });
+      onLogin({
+        u_type: response.data.u_type,
+        user_id: response.data.user_id,
+        name: response.data.name,
+        last_name: response.data.last_name,
+        email: emailInput
+      });
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Credenciales incorrectas');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleUserRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegError('');
+    setRegLoading(true);
+    const u_name = (document.getElementById('reg-first-name') as HTMLInputElement)?.value;
+    const last_name = (document.getElementById('reg-last-name') as HTMLInputElement)?.value;
+    const email = (document.getElementById('reg-email') as HTMLInputElement)?.value;
+    const phone = (document.getElementById('reg-phone') as HTMLInputElement)?.value;
+    const u_password = (document.getElementById('reg-password') as HTMLInputElement)?.value;
+    try {
+      await axios.post('http://127.0.0.1:8000/api/users/register/', {
+        u_name, last_name, u_password, email, phone, u_type: 'regular'
+      });
+      // Auto-login right after successful registration
+      const loginResp = await axios.post('http://127.0.0.1:8000/api/users/login/', {
+        identifier: email,
+        password: u_password
+      });
+      onLogin({
+        u_type: loginResp.data.u_type,
+        user_id: loginResp.data.user_id,
+        name: loginResp.data.name,
+        last_name: loginResp.data.last_name,
+        email
+      });
+    } catch (error: any) {
+      const msg = error?.response?.data?.error || 'No se pudo crear la cuenta';
+      setRegError(msg);
+    } finally {
+      setRegLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
@@ -42,20 +116,29 @@ export function Login({ onLogin }: LoginProps) {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form
-                className="space-y-4"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  onLogin('institution');
-                }}
-              >
+            <form className="space-y-4" onSubmit={handleLogin}>
+
                 <div className="space-y-2">
                   <Label htmlFor="email">Correo Electrónico</Label>
-                  <Input id="email" type="email" placeholder="correo@ejemplo.com" required />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="correo@ejemplo.com"
+                    required
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Contraseña</Label>
-                  <Input id="password" type="password" placeholder="••••••••" required />
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    required
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                  />
                 </div>
                 <Button type="submit" className="w-full">
                   Iniciar Sesión
@@ -85,7 +168,7 @@ export function Login({ onLogin }: LoginProps) {
                   type="button"
                   variant="ghost"
                   className="w-full"
-                  onClick={() => onLogin('public')}
+                  onClick={() => onLogin({ u_type: 'public' })}
                 >
                   Continuar como Visitante
                 </Button>
@@ -103,7 +186,10 @@ export function Login({ onLogin }: LoginProps) {
             </CardHeader>
             <CardContent>
               <Tabs value={registrationType} onValueChange={(v) => setRegistrationType(v as any)}>
-                <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsList className="grid w-full grid-cols-3 mb-6">
+                  <TabsTrigger value="user">
+                    Crear Usuario
+                  </TabsTrigger>
                   <TabsTrigger value="institution">
                     <Building2 className="h-4 w-4 mr-2" />
                     Institución
@@ -113,6 +199,47 @@ export function Login({ onLogin }: LoginProps) {
                     Estación de Monitoreo
                   </TabsTrigger>
                 </TabsList>
+
+                {/* Registro de Usuario Simple (conexión Django) */}
+                <TabsContent value="user" className="space-y-4">
+                  {regError && (
+                    <Alert variant="destructive">
+                      <AlertDescription>{regError}</AlertDescription>
+                    </Alert>
+                  )}
+                  <form className="space-y-4" onSubmit={handleUserRegister}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="reg-first-name">Nombre *</Label>
+                        <Input id="reg-first-name" placeholder="Juan" required />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="reg-last-name">Apellido *</Label>
+                        <Input id="reg-last-name" placeholder="Pérez" required />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="reg-email">Correo *</Label>
+                        <Input id="reg-email" type="email" placeholder="usuario@correo.com" required />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="reg-phone">Teléfono</Label>
+                        <Input id="reg-phone" type="tel" placeholder="300 123 4567" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="reg-password">Contraseña *</Label>
+                      <Input id="reg-password" type="password" placeholder="••••••••" required />
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <Button type="submit" disabled={regLoading} className="flex-1">
+                        {regLoading ? 'Creando...' : 'Crear cuenta'}
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => setIsRegistering(false)} disabled={regLoading}>Volver a iniciar sesión</Button>
+                    </div>
+                  </form>
+                </TabsContent>
 
                 <TabsContent value="institution" className="space-y-4">
                   <Alert>

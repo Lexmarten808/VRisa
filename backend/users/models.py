@@ -12,28 +12,35 @@ class User(models.Model):
 
     class Meta:
         db_table = 'users'
+        # managed = False  # Indica que Django no debe gestionar la tabla
 
     def __str__(self):
         return f"{self.u_name} {self.last_name}"
 
 
 class Email(models.Model):
-    u_id = models.ForeignKey(User, on_delete=models.CASCADE, related_name='emails')
+    email_id = models.AutoField(primary_key=True, db_column='email_id')
+    u_id = models.ForeignKey(User, on_delete=models.CASCADE, related_name='emails', db_column='u_id')
     email = models.CharField(max_length=100, unique=True)
 
     class Meta:
         db_table = 'email'
+        # managed = False  # Indica que Django no debe gestionar la tabla
+
 
     def __str__(self):
         return self.email
 
 
 class PhoneNumber(models.Model):
-    u_id = models.ForeignKey(User, on_delete=models.CASCADE, related_name='phones')
+    p_number_id = models.AutoField(primary_key=True, db_column='p_number_id')
+    u_id = models.ForeignKey(User, on_delete=models.CASCADE, related_name='phones', db_column='u_id')
     p_number = models.CharField(max_length=15, unique=True)
 
     class Meta:
         db_table = 'phone_number'
+        # managed = False  # Indica que Django no debe gestionar la tabla
+
 
     def __str__(self):
         return self.p_number

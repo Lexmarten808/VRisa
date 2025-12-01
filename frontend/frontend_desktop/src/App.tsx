@@ -4,53 +4,110 @@ import {
   Building2,
   Radio,
   FileText,
-  LogOut,
   Menu,
   X,
   ChevronDown,
 } from 'lucide-react';
 import { Dashboard } from './components/Dashboard';
 import { Login } from './components/Login';
+import { useEffect } from 'react';
+import { applyInstitutionTheme, clearInstitutionTheme, loadInstitutionThemeFromStorage, paletteFromColorSet } from './lib/theme';
 import { AdminInstitutions } from './components/AdminInstitutions';
 import { StationManagement } from './components/StationManagement';
 import { Reports } from './components/Reports';
 import { Button } from './components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from './components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from './components/ui/avatar';
 
 type View = 'dashboard' | 'institutions' | 'stations' | 'reports';
 type UserType = 'public' | 'institution' | 'admin' | null;
+interface UserInfo {
+  user_id?: number;
+  name?: string;
+  last_name?: string;
+  email?: string;
+  u_type?: string;
+}
 
 export default function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
-  const [userType, setUserType] = useState<UserType>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [userType, setUserType] = useState<UserType>(() => {
+    try {
+      const t = localStorage.getItem('vrisa_user_type');
+      return (t as UserType) || null;
+    } catch {
+      return null;
+    }
+  });
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(() => {
+    try {
+      const raw = localStorage.getItem('vrisa_user_info');
+      return raw ? (JSON.parse(raw) as UserInfo) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [institutionColorSet, setInstitutionColorSet] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Force clean re-render cycles on auth/state changes
+  const [appKey, setAppKey] = useState<number>(Date.now());
+  // Simple profile submenu toggle
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
-  const handleLogin = (type: string) => {
-    if (type === 'public') {
-      setUserType('public');
-    } else if (type === 'institution') {
-      setUserType('institution');
-    } else if (type === 'admin') {
-      setUserType('admin');
+  // Defensive: accept either a payload object or a plain string user type
+  const handleLogin = (payload: { u_type: string; user_id?: number; name?: string; last_name?: string; email?: string } | string) => {
+    // Normalizar tipos que vienen del backend (regular, invitado, super_admin, etc.)
+    const normalized = (() => {
+      const t = (typeof payload === 'string' ? payload : (payload.u_type || '')).toLowerCase();
+      if (['public', 'regular', 'invitado', 'visitor'].includes(t)) return 'public';
+      if (['institution', 'institucion', 'org'].includes(t)) return 'institution';
+      if (['admin', 'super_admin', 'administrator'].includes(t)) return 'admin';
+      return 'public';
+    })();
+    setUserType(normalized as UserType);
+    // Persist for refresh
+    localStorage.setItem('vrisa_user_type', normalized);
+    // Store user info
+    const p = typeof payload === 'string' ? { u_type: payload } : payload;
+    const info: UserInfo = {
+      user_id: p.user_id,
+      name: p.name,
+      last_name: p.last_name,
+      email: p.email,
+      u_type: p.u_type
+    };
+    setUserInfo(info);
+    localStorage.setItem('vrisa_user_info', JSON.stringify(info));
+    setCurrentView('dashboard');
+    setSidebarOpen(false);
+    // bump key to force a clean re-render of subtree
+    setAppKey(Date.now());
+    console.log('Login success:', { normalized, info });
+    // If the user belongs to an institution (by type), try to apply a theme.
+    // Later, when linking user->station from backend, pass color_set explicitly.
+    if (normalized === 'institution') {
+      // Fallback: infer from email domain or default sample mapping
+      const inferredColorSet = 'red-white';
+      setInstitutionColorSet(inferredColorSet);
+      const palette = paletteFromColorSet(inferredColorSet);
+      if (palette) applyInstitutionTheme(palette);
+    } else {
+      clearInstitutionTheme();
+      setInstitutionColorSet(null);
     }
   };
 
   const handleLogout = () => {
     setUserType(null);
     setCurrentView('dashboard');
+    localStorage.removeItem('vrisa_user_type');
+    localStorage.removeItem('vrisa_user_info');
+    setSidebarOpen(false);
+    clearInstitutionTheme();
+    // bump key to force a clean re-render of subtree
+    setAppKey(Date.now());
   };
 
-  // Si no está logueado, mostrar pantalla de login
-  if (userType === null) {
-    return <Login onLogin={handleLogin} />;
-  }
+  // Nota: evitamos returns condicionales antes de hooks para mantener el orden
 
   const menuItems = [
     {
@@ -79,40 +136,63 @@ export default function App() {
     },
   ];
 
-  const visibleMenuItems = menuItems.filter((item) => item.roles.includes(userType));
+  // Filtrar elementos según el tipo de usuario (comportamiento original)
+  const visibleMenuItems = menuItems.filter((item) => item.roles.includes(userType || 'public'));
 
   const getUserLabel = () => {
+    if (userInfo?.name) {
+      return `${userInfo.name}${userInfo.last_name ? ' ' + userInfo.last_name : ''}`;
+    }
     switch (userType) {
-      case 'admin':
-        return 'Administrador del Sistema';
-      case 'institution':
-        return 'Universidad del Valle';
-      case 'public':
-        return 'Usuario Visitante';
-      default:
-        return 'Usuario';
+      case 'admin': return 'Administrador del Sistema';
+      case 'institution': return 'Institución';
+      case 'public': return 'Usuario Visitante';
+      default: return 'Usuario';
     }
   };
 
   const getUserInitials = () => {
+    if (userInfo?.name) {
+      const first = userInfo.name.charAt(0).toUpperCase();
+      const second = userInfo.last_name ? userInfo.last_name.charAt(0).toUpperCase() : '';
+      return (first + second) || 'U';
+    }
     switch (userType) {
-      case 'admin':
-        return 'AS';
-      case 'institution':
-        return 'UV';
-      case 'public':
-        return 'UV';
-      default:
-        return 'U';
+      case 'admin': return 'AS';
+      case 'institution': return 'IN';
+      case 'public': return 'PU';
+      default: return 'U';
+    }
+  };
+
+  // Load theme from storage on mount
+  useEffect(() => {
+    loadInstitutionThemeFromStorage();
+  }, []);
+
+  // Fallback dashboard rendering handled within main return to avoid conditional returns
+
+  // Expose a helper to set institution theme when a station is linked
+  const setThemeForInstitution = (colorSet?: string) => {
+    const palette = paletteFromColorSet(colorSet);
+    if (palette) {
+      applyInstitutionTheme(palette);
+      setInstitutionColorSet(palette.name || null);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div key={appKey} className="min-h-screen bg-gray-50">
+      {userType === null ? (
+        <div className="min-h-screen p-6">
+          <Login onLogin={handleLogin} />
+        </div>
+      ) : (
+        <>
       {/* Top Navigation Bar */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 relative">
             <Button
               variant="ghost"
               size="sm"
@@ -137,46 +217,52 @@ export default function App() {
             <div className="hidden md:block text-right">
               <div className="text-sm font-semibold">{getUserLabel()}</div>
               <div className="text-xs text-gray-600">
-                {userType === 'admin'
-                  ? 'admin@vrisa.gov.co'
-                  : userType === 'institution'
-                  ? 'contacto@univalle.edu.co'
-                  : 'Acceso público'}
+                {userInfo?.email || (
+                  userType === 'admin'
+                    ? 'admin@vrisa.gov.co'
+                    : userType === 'institution'
+                      ? 'contacto@institucion.edu'
+                      : 'Acceso público'
+                )}
               </div>
             </div>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center gap-2">
-                  <Avatar>
-                    <AvatarFallback className="bg-blue-600 text-white">
-                      {getUserInitials()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <div className="px-2 py-2">
-                  <div className="font-semibold">{getUserLabel()}</div>
-                  <div className="text-xs text-gray-600">
-                    {userType === 'admin'
-                      ? 'admin@vrisa.gov.co'
-                      : userType === 'institution'
-                      ? 'contacto@univalle.edu.co'
-                      : 'Acceso público'}
+            {/* Default avatar with simple submenu */}
+            <div className="relative">
+              <Button type="button" variant="ghost" className="flex items-center gap-2" onClick={(e) => { e.stopPropagation(); setProfileMenuOpen((v) => !v); }}>
+                <Avatar>
+                  <AvatarFallback className="bg-blue-600 text-white">
+                    {getUserInitials()}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+              {profileMenuOpen && (
+                <div className="absolute right-0 mt-2 w-40 rounded-md border bg-white shadow-lg z-[1000]" onClick={(e) => e.stopPropagation()}>
+                  <div className="px-3 py-2 text-sm border-b">
+                    <div className="font-semibold">{getUserLabel()}</div>
+                    <div className="text-xs text-gray-600 truncate">
+                      {userInfo?.email || (
+                        userType === 'admin'
+                          ? 'admin@vrisa.gov.co'
+                          : userType === 'institution'
+                            ? 'contacto@institucion.edu'
+                            : 'Acceso público'
+                      )}
+                    </div>
                   </div>
+                  <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100" onClick={() => { setProfileMenuOpen(false); }}>
+                    Perfil
+                  </button>
+                  <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100" onClick={() => { setProfileMenuOpen(false); }}>
+                    Configuración
+                  </button>
+                  <button className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50" onClick={() => { setProfileMenuOpen(false); handleLogout(); }}>
+                    Cerrar Sesión
+                  </button>
                 </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>Perfil</DropdownMenuItem>
-                <DropdownMenuItem>Configuración</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout}>
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Cerrar Sesión
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              )}
+            </div>
+
+            {/* Removed explicit logout button per request */}
           </div>
         </div>
       </div>
@@ -234,20 +320,34 @@ export default function App() {
         {sidebarOpen && (
           <div
             className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden top-[73px]"
-            onClick={() => setSidebarOpen(false)}
+            onClick={() => { setSidebarOpen(false); setProfileMenuOpen(false); }}
           />
         )}
 
         {/* Main Content */}
         <main className="flex-1 p-6 lg:p-8 max-w-[1600px] mx-auto w-full">
-          {currentView === 'dashboard' && <Dashboard />}
-          {currentView === 'institutions' && userType === 'admin' && <AdminInstitutions />}
-          {currentView === 'stations' && (userType === 'institution' || userType === 'admin') && (
-            <StationManagement />
+          {visibleMenuItems.length === 0 ? (
+            <>
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold">Bienvenido</h2>
+                <div className="text-sm text-gray-600">Sesión activa como {getUserLabel()}</div>
+              </div>
+              <Dashboard />
+            </>
+          ) : (
+            <>
+              {currentView === 'dashboard' && <Dashboard />}
+              {currentView === 'institutions' && userType === 'admin' && <AdminInstitutions />}
+              {currentView === 'stations' && (userType === 'institution' || userType === 'admin') && (
+                <StationManagement />
+              )}
+              {currentView === 'reports' && <Reports />}
+            </>
           )}
-          {currentView === 'reports' && <Reports />}
         </main>
       </div>
+        </>
+      )}
     </div>
   );
 }

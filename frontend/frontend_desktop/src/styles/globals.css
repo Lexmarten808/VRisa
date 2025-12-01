@@ -39,6 +39,11 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  /* Institution theme variables */
+  --inst-brand: #2563eb;
+  --inst-accent: #64748b;
+  --inst-bg: #ffffff;
+  --inst-text: #0f172a;
 }
 
 .dark {
@@ -125,7 +130,9 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    background-color: var(--inst-bg);
+    color: var(--inst-text);
   }
 }
 
