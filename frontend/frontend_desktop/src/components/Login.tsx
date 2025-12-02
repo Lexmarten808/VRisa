@@ -4,11 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Alert, AlertDescription } from './ui/alert';
-import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Building2, Radio, Info } from 'lucide-react';
+import { Radio } from 'lucide-react';
+import { PendingApproval } from './PendingApproval';
 
 
 
@@ -27,15 +26,33 @@ interface LoginProps {
 
 export function Login({ onLogin }: LoginProps) {
   const [isRegistering, setIsRegistering] = useState(false);
-  const [registrationType, setRegistrationType] = useState<'institution' | 'station' | 'user'>('user');
   const [regError, setRegError] = useState<string>('');
   const [regLoading, setRegLoading] = useState(false);
+  const [regMode, setRegMode] = useState<'user' | 'institution'>('user');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState<string>('');
+  const [pendingView, setPendingView] = useState(false);
+  // Registration controlled state
+  const [regFirstName, setRegFirstName] = useState('');
+  const [regLastName, setRegLastName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regRole, setRegRole] = useState<'ciudadano' | 'administrador_estacion'>('ciudadano');
+  const [regStationId, setRegStationId] = useState('');
+  // Institution registration
+  const [instName, setInstName] = useState('');
+  const [instStreet, setInstStreet] = useState('');
+  const [instNeighborhood, setInstNeighborhood] = useState('');
+  const [instColorSet, setInstColorSet] = useState('');
+  const [instAdminEmail, setInstAdminEmail] = useState('');
+  const [instAdminPassword, setInstAdminPassword] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoginError('');
     setLoginLoading(true);
     const emailInput = loginEmail.trim();
     const passwordInput = loginPassword;
@@ -52,7 +69,12 @@ export function Login({ onLogin }: LoginProps) {
         email: emailInput
       });
     } catch (error: any) {
-      alert(error.response?.data?.error || 'Credenciales incorrectas');
+      const msg = error?.response?.data?.error || 'Error al iniciar sesión';
+      if (error?.response?.status === 403 && typeof msg === 'string' && msg.toLowerCase().includes('no ha sido validado')) {
+        setPendingView(true);
+      } else {
+        setLoginError(msg);
+      }
     } finally {
       setLoginLoading(false);
     }
@@ -62,14 +84,15 @@ export function Login({ onLogin }: LoginProps) {
     e.preventDefault();
     setRegError('');
     setRegLoading(true);
-    const u_name = (document.getElementById('reg-first-name') as HTMLInputElement)?.value;
-    const last_name = (document.getElementById('reg-last-name') as HTMLInputElement)?.value;
-    const email = (document.getElementById('reg-email') as HTMLInputElement)?.value;
-    const phone = (document.getElementById('reg-phone') as HTMLInputElement)?.value;
-    const u_password = (document.getElementById('reg-password') as HTMLInputElement)?.value;
+    const u_name = regFirstName.trim();
+    const last_name = regLastName.trim();
+    const email = regEmail.trim();
+    const phone = regPhone.trim();
+    const u_password = regPassword;
+    const u_type = regRole === 'ciudadano' ? 'regular' : 'station_admin';
     try {
       await axios.post('http://127.0.0.1:8000/api/users/register/', {
-        u_name, last_name, u_password, email, phone, u_type: 'regular'
+        u_name, last_name, u_password, email, phone, u_type, station_id: regRole === 'administrador_estacion' ? regStationId.trim() : undefined
       });
       // Auto-login right after successful registration
       const loginResp = await axios.post('http://127.0.0.1:8000/api/users/login/', {
@@ -85,6 +108,38 @@ export function Login({ onLogin }: LoginProps) {
       });
     } catch (error: any) {
       const msg = error?.response?.data?.error || 'No se pudo crear la cuenta';
+      setRegError(msg);
+    } finally {
+      setRegLoading(false);
+    }
+  };
+
+  const handleInstitutionRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegError('');
+    setRegLoading(true);
+    try {
+      // Endpoint atómico: crea usuario + institución
+      await axios.post('http://127.0.0.1:8000/api/institutions/register_with_user/', {
+        i_name: instName.trim(),
+        street: instStreet.trim() || null,
+        neighborhood: instNeighborhood.trim() || null,
+        color_set: instColorSet.trim() || null,
+        email: instAdminEmail,
+        password: instAdminPassword
+      });
+      // Nota: Login inmediato puede estar bloqueado por validación; omitimos autologin
+      // Reset
+      setIsRegistering(false);
+      setRegMode('user');
+      setInstName('');
+      setInstStreet('');
+      setInstNeighborhood('');
+      setInstColorSet('');
+      setInstAdminEmail('');
+      setInstAdminPassword('');
+    } catch (error: any) {
+      const msg = error?.response?.data?.error || 'No se pudo registrar la institución';
       setRegError(msg);
     } finally {
       setRegLoading(false);
@@ -108,7 +163,11 @@ export function Login({ onLogin }: LoginProps) {
 
         {!isRegistering ? (
           /* Formulario de Login */
-          <Card className="max-w-md mx-auto">
+          <div className="max-w-md mx-auto">
+            {pendingView ? (
+              <PendingApproval email={loginEmail} onBack={() => { setPendingView(false); setLoginError(''); }} />
+            ) : (
+          <Card>
             <CardHeader>
               <CardTitle>Iniciar Sesión</CardTitle>
               <CardDescription>
@@ -118,6 +177,11 @@ export function Login({ onLogin }: LoginProps) {
             <CardContent>
             <form className="space-y-4" onSubmit={handleLogin}>
 
+                {loginError && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{loginError}</AlertDescription>
+                  </Alert>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="email">Correo Electrónico</Label>
                   <Input
@@ -160,9 +224,9 @@ export function Login({ onLogin }: LoginProps) {
                   type="button"
                   variant="outline"
                   className="w-full"
-                  onClick={() => setIsRegistering(true)}
+                  onClick={() => { setRegMode('user'); setIsRegistering(true); }}
                 >
-                  Registrar Nueva Institución o Estación
+                  Registrarme
                 </Button>
                 <Button
                   type="button"
@@ -175,313 +239,124 @@ export function Login({ onLogin }: LoginProps) {
               </form>
             </CardContent>
           </Card>
+            )}
+          </div>
         ) : (
           /* Formularios de Registro */
           <Card>
             <CardHeader>
-              <CardTitle>Registro</CardTitle>
-              <CardDescription>
-                Registra tu institución o estación de monitoreo en la plataforma VRISA
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>{regMode === 'user' ? 'Registrarme' : 'Registrar Institución'}</CardTitle>
+                  <CardDescription>
+                    {regMode === 'user'
+                      ? 'Crea tu cuenta en VRISA. Si eres administrador de estación, proporciona la ID de la estación.'
+                      : 'Solicita el registro de tu institución. Será validada por el administrador.'}
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant={regMode === 'user' ? 'default' : 'outline'} size="sm" onClick={() => setRegMode('user')}>Usuario</Button>
+                  <Button variant={regMode === 'institution' ? 'default' : 'outline'} size="sm" onClick={() => setRegMode('institution')}>Institución</Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              <Tabs value={registrationType} onValueChange={(v) => setRegistrationType(v as any)}>
-                <TabsList className="grid w-full grid-cols-3 mb-6">
-                  <TabsTrigger value="user">
-                    Crear Usuario
-                  </TabsTrigger>
-                  <TabsTrigger value="institution">
-                    <Building2 className="h-4 w-4 mr-2" />
-                    Institución
-                  </TabsTrigger>
-                  <TabsTrigger value="station">
-                    <Radio className="h-4 w-4 mr-2" />
-                    Estación de Monitoreo
-                  </TabsTrigger>
-                </TabsList>
-
-                {/* Registro de Usuario Simple (conexión Django) */}
-                <TabsContent value="user" className="space-y-4">
-                  {regError && (
-                    <Alert variant="destructive">
-                      <AlertDescription>{regError}</AlertDescription>
-                    </Alert>
-                  )}
-                  <form className="space-y-4" onSubmit={handleUserRegister}>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="reg-first-name">Nombre *</Label>
-                        <Input id="reg-first-name" placeholder="Juan" required />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="reg-last-name">Apellido *</Label>
-                        <Input id="reg-last-name" placeholder="Pérez" required />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="reg-email">Correo *</Label>
-                        <Input id="reg-email" type="email" placeholder="usuario@correo.com" required />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="reg-phone">Teléfono</Label>
-                        <Input id="reg-phone" type="tel" placeholder="300 123 4567" />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="reg-password">Contraseña *</Label>
-                      <Input id="reg-password" type="password" placeholder="••••••••" required />
-                    </div>
-                    <div className="flex gap-2 pt-2">
-                      <Button type="submit" disabled={regLoading} className="flex-1">
-                        {regLoading ? 'Creando...' : 'Crear cuenta'}
-                      </Button>
-                      <Button type="button" variant="outline" onClick={() => setIsRegistering(false)} disabled={regLoading}>Volver a iniciar sesión</Button>
-                    </div>
-                  </form>
-                </TabsContent>
-
-                <TabsContent value="institution" className="space-y-4">
-                  <Alert>
-                    <Info className="h-4 w-4" />
-                    <AlertDescription>
-                      El registro de instituciones debe ser validado por el administrador del
-                      sistema antes de obtener acceso completo.
-                    </AlertDescription>
-                  </Alert>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="inst-name">Nombre Oficial de la Institución *</Label>
-                      <Input id="inst-name" placeholder="Universidad del Valle" required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="inst-email">Correo Electrónico Institucional *</Label>
-                      <Input id="inst-email" type="email" placeholder="contacto@inst.edu.co" required />
-                    </div>
-                  </div>
-
+              {regError && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertDescription>{regError}</AlertDescription>
+                </Alert>
+              )}
+              {regMode === 'user' ? (
+              <form className="space-y-4" onSubmit={handleUserRegister}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="inst-address">Dirección Física *</Label>
-                    <Input id="inst-address" placeholder="Calle 13 # 100-00, Cali" required />
+                    <Label htmlFor="reg-first-name">Nombre *</Label>
+                    <Input id="reg-first-name" placeholder="Juan" required value={regFirstName} onChange={(e) => setRegFirstName(e.target.value)} />
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="inst-phone">Teléfono de Contacto</Label>
-                      <Input id="inst-phone" type="tel" placeholder="+57 2 123 4567" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="inst-website">Sitio Web</Label>
-                      <Input id="inst-website" type="url" placeholder="https://www.institucion.edu.co" />
-                    </div>
-                  </div>
-
                   <div className="space-y-2">
-                    <Label htmlFor="inst-logo">Logo de la Institución (URL o archivo)</Label>
-                    <Input id="inst-logo" type="file" accept="image/*" />
+                    <Label htmlFor="reg-last-name">Apellido *</Label>
+                    <Input id="reg-last-name" placeholder="Pérez" required value={regLastName} onChange={(e) => setRegLastName(e.target.value)} />
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="inst-primary-color">Color Primario (Hexadecimal)</Label>
-                      <div className="flex gap-2">
-                        <Input id="inst-primary-color" placeholder="#0066CC" />
-                        <Input type="color" className="w-16" defaultValue="#0066CC" />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="inst-secondary-color">Color Secundario (Hexadecimal)</Label>
-                      <div className="flex gap-2">
-                        <Input id="inst-secondary-color" placeholder="#00AA00" />
-                        <Input type="color" className="w-16" defaultValue="#00AA00" />
-                      </div>
-                    </div>
-                  </div>
-
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="inst-description">Descripción de la Institución</Label>
-                    <Textarea
-                      id="inst-description"
-                      placeholder="Breve descripción de la institución y su interés en el monitoreo ambiental..."
-                      rows={4}
-                    />
+                    <Label htmlFor="reg-email">Correo *</Label>
+                    <Input id="reg-email" type="email" placeholder="usuario@correo.com" required value={regEmail} onChange={(e) => setRegEmail(e.target.value)} />
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="admin-name">Nombre del Administrador *</Label>
-                      <Input id="admin-name" placeholder="Juan Pérez" required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="admin-position">Cargo *</Label>
-                      <Input id="admin-position" placeholder="Director de Sostenibilidad" required />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="admin-email">Correo del Administrador *</Label>
-                      <Input id="admin-email" type="email" placeholder="admin@inst.edu.co" required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="admin-password">Contraseña *</Label>
-                      <Input id="admin-password" type="password" placeholder="••••••••" required />
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 pt-4">
-                    <Button type="button" className="flex-1">
-                      Enviar Solicitud de Registro
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsRegistering(false)}
-                    >
-                      Cancelar
-                    </Button>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="station" className="space-y-4">
-                  <Alert>
-                    <Info className="h-4 w-4" />
-                    <AlertDescription>
-                      El registro de estaciones debe ser aprobado por la institución asociada antes
-                      de activarse en la plataforma.
-                    </AlertDescription>
-                  </Alert>
-
                   <div className="space-y-2">
-                    <Label htmlFor="station-name">Nombre de la Estación *</Label>
-                    <Input id="station-name" placeholder="Estación Centro" required />
+                    <Label htmlFor="reg-phone">Teléfono</Label>
+                    <Input id="reg-phone" type="tel" placeholder="300 123 4567" value={regPhone} onChange={(e) => setRegPhone(e.target.value)} />
                   </div>
-
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="reg-password">Contraseña *</Label>
+                  <Input id="reg-password" type="password" placeholder="••••••••" required value={regPassword} onChange={(e) => setRegPassword(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="station-institution">Institución Asociada *</Label>
-                    <Select required>
-                      <SelectTrigger id="station-institution">
-                        <SelectValue placeholder="Seleccionar institución" />
+                    <Label>Rol *</Label>
+                    <Select value={regRole} onValueChange={(v) => setRegRole(v as any)}>
+                      <SelectTrigger id="reg-role">
+                        <SelectValue placeholder="Selecciona tu rol" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="univalle">Universidad del Valle</SelectItem>
-                        <SelectItem value="dagma">DAGMA</SelectItem>
-                        <SelectItem value="cvc">CVC</SelectItem>
+                        <SelectItem value="ciudadano">Ciudadano</SelectItem>
+                        <SelectItem value="administrador_estacion">Administrador de Estación</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {regRole === 'administrador_estacion' && (
                     <div className="space-y-2">
-                      <Label htmlFor="station-lat">Latitud *</Label>
-                      <Input id="station-lat" placeholder="3.4516" required />
+                      <Label htmlFor="reg-station-id">ID de la Estación *</Label>
+                      <Input id="reg-station-id" placeholder="Ej: 12" value={regStationId} onChange={(e) => setRegStationId(e.target.value)} required />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="station-lng">Longitud *</Label>
-                      <Input id="station-lng" placeholder="-76.5320" required />
-                    </div>
-                  </div>
-
+                  )}
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button type="submit" disabled={regLoading} className="flex-1">
+                    {regLoading ? 'Creando...' : 'Crear cuenta'}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setIsRegistering(false)} disabled={regLoading}>Volver a iniciar sesión</Button>
+                </div>
+              </form>
+              ) : (
+              <form className="space-y-4" onSubmit={handleInstitutionRegister}>
+                <div className="space-y-2">
+                  <Label htmlFor="inst-name">Nombre de la Institución *</Label>
+                  <Input id="inst-name" placeholder="Universidad del Valle" required value={instName} onChange={(e) => setInstName(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="station-address">Dirección *</Label>
-                    <Input id="station-address" placeholder="Carrera 100 # 13-00, Cali" required />
+                    <Label htmlFor="inst-street">Dirección</Label>
+                    <Input id="inst-street" placeholder="Calle 13 #100" value={instStreet} onChange={(e) => setInstStreet(e.target.value)} />
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="station-sensor">Tipo de Sensor *</Label>
-                      <Select required>
-                        <SelectTrigger id="station-sensor">
-                          <SelectValue placeholder="Seleccionar sensor" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="bam1020">BAM-1020 (PM2.5/PM10)</SelectItem>
-                          <SelectItem value="teledyne">Teledyne T400 (Gases)</SelectItem>
-                          <SelectItem value="combined">Combinado (PM + Gases)</SelectItem>
-                          <SelectItem value="other">Otro</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="station-frequency">Frecuencia de Medición</Label>
-                      <Select>
-                        <SelectTrigger id="station-frequency">
-                          <SelectValue placeholder="Seleccionar frecuencia" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="1min">Cada minuto</SelectItem>
-                          <SelectItem value="5min">Cada 5 minutos</SelectItem>
-                          <SelectItem value="15min">Cada 15 minutos</SelectItem>
-                          <SelectItem value="1hour">Cada hora</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
                   <div className="space-y-2">
-                    <Label>Variables Monitoreadas *</Label>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                      {['PM2.5', 'PM10', 'SO2', 'NO2', 'O3', 'CO', 'Temperatura', 'Humedad', 'Viento'].map(
-                        (variable) => (
-                          <div key={variable} className="flex items-center space-x-2">
-                            <input type="checkbox" id={`var-${variable}`} className="rounded" />
-                            <Label htmlFor={`var-${variable}`} className="cursor-pointer">
-                              {variable}
-                            </Label>
-                          </div>
-                        )
-                      )}
-                    </div>
+                    <Label htmlFor="inst-neighborhood">Barrio</Label>
+                    <Input id="inst-neighborhood" placeholder="Ciudad Universitaria" value={instNeighborhood} onChange={(e) => setInstNeighborhood(e.target.value)} />
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="station-responsible">Responsable Técnico *</Label>
-                      <Input id="station-responsible" placeholder="Dr. María González" required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="station-contact">Contacto *</Label>
-                      <Input
-                        id="station-contact"
-                        type="email"
-                        placeholder="responsable@inst.edu.co"
-                        required
-                      />
-                    </div>
-                  </div>
-
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="inst-colorset">Conjunto de Colores</Label>
+                  <Input id="inst-colorset" placeholder="red-white" value={instColorSet} onChange={(e) => setInstColorSet(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="station-certificates">Certificados de Calibración</Label>
-                    <Input id="station-certificates" type="file" accept=".pdf,.doc,.docx" multiple />
-                    <p className="text-xs text-gray-500">
-                      Carga los certificados de calibración y documentación técnica del equipo
-                    </p>
+                    <Label htmlFor="inst-admin-email">Email de la Institución *</Label>
+                    <Input id="inst-admin-email" type="email" placeholder="admin@institucion.com" required value={instAdminEmail} onChange={(e) => setInstAdminEmail(e.target.value)} />
                   </div>
-
                   <div className="space-y-2">
-                    <Label htmlFor="station-notes">Notas Adicionales</Label>
-                    <Textarea
-                      id="station-notes"
-                      placeholder="Información adicional sobre la estación, ubicación específica, condiciones especiales..."
-                      rows={3}
-                    />
+                    <Label htmlFor="inst-admin-password">Contraseña *</Label>
+                    <Input id="inst-admin-password" type="password" placeholder="••••••••" required value={instAdminPassword} onChange={(e) => setInstAdminPassword(e.target.value)} />
                   </div>
-
-                  <div className="flex gap-2 pt-4">
-                    <Button type="button" className="flex-1">
-                      Enviar Solicitud de Estación
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsRegistering(false)}
-                    >
-                      Cancelar
-                    </Button>
-                  </div>
-                </TabsContent>
-              </Tabs>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button type="submit" disabled={regLoading} className="flex-1">
+                    {regLoading ? 'Enviando...' : 'Enviar solicitud'}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setIsRegistering(false)} disabled={regLoading}>Volver a iniciar sesión</Button>
+                </div>
+              </form>
+              )}
             </CardContent>
           </Card>
         )}

@@ -7,6 +7,7 @@ import {
   Menu,
   X,
   ChevronDown,
+  Users as UsersIcon,
 } from 'lucide-react';
 import { Dashboard } from './components/Dashboard';
 import { Login } from './components/Login';
@@ -17,8 +18,9 @@ import { StationManagement } from './components/StationManagement';
 import { Reports } from './components/Reports';
 import { Button } from './components/ui/button';
 import { Avatar, AvatarFallback } from './components/ui/avatar';
+import { UserManagement } from './components/UserManagement';
 
-type View = 'dashboard' | 'institutions' | 'stations' | 'reports';
+type View = 'dashboard' | 'institutions' | 'stations' | 'reports' | 'users';
 type UserType = 'public' | 'institution' | 'admin' | null;
 interface UserInfo {
   user_id?: number;
@@ -123,6 +125,12 @@ export default function App() {
       roles: ['admin'],
     },
     {
+      id: 'users' as View,
+      label: 'Gestión de Usuarios',
+      icon: UsersIcon,
+      roles: ['admin'],
+    },
+    {
       id: 'stations' as View,
       label: 'Gestión de Estaciones',
       icon: Radio,
@@ -146,7 +154,7 @@ export default function App() {
     switch (userType) {
       case 'admin': return 'Administrador del Sistema';
       case 'institution': return 'Institución';
-      case 'public': return 'Usuario Visitante';
+      case 'public': return 'Visitante';
       default: return 'Usuario';
     }
   };
@@ -160,9 +168,24 @@ export default function App() {
     switch (userType) {
       case 'admin': return 'AS';
       case 'institution': return 'IN';
-      case 'public': return 'PU';
+      case 'public': return 'VI';
       default: return 'U';
     }
+  };
+
+  // Map backend role to Spanish label
+  const getRoleLabel = () => {
+    const raw = (userInfo?.u_type || '').toLowerCase();
+    if (raw === 'regular' || raw === 'ciudadano') return 'Ciudadano';
+    if (raw === 'station_admin' || raw === 'administrador_estacion') return 'Administrador de Estación';
+    if (raw === 'admin' || raw === 'super_admin') return 'Administrador del Sistema';
+    if (raw === 'institution' || raw === 'institucion') return 'Institución';
+    // Fallback to visitor when not logged or unknown
+    if (!userType || userType === 'public') return 'Visitante';
+    // Default based on userType
+    return userType === 'admin' ? 'Administrador del Sistema'
+      : userType === 'institution' ? 'Institución'
+      : 'Visitante';
   };
 
   // Load theme from storage on mount
@@ -222,7 +245,7 @@ export default function App() {
                     ? 'admin@vrisa.gov.co'
                     : userType === 'institution'
                       ? 'contacto@institucion.edu'
-                      : 'Acceso público'
+                      : 'Visitante'
                 )}
               </div>
             </div>
@@ -245,7 +268,7 @@ export default function App() {
                           ? 'admin@vrisa.gov.co'
                           : userType === 'institution'
                             ? 'contacto@institucion.edu'
-                            : 'Acceso público'
+                            : 'Visitante'
                       )}
                     </div>
                   </div>
@@ -305,13 +328,7 @@ export default function App() {
           <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-gray-50">
             <div className="text-xs text-gray-600">
               <div className="font-semibold mb-1">Tipo de Cuenta</div>
-              <div>
-                {userType === 'admin'
-                  ? 'Administrador del Sistema'
-                  : userType === 'institution'
-                  ? 'Institución'
-                  : 'Visitante'}
-              </div>
+              <div>{getRoleLabel()}</div>
             </div>
           </div>
         </aside>
@@ -338,6 +355,7 @@ export default function App() {
             <>
               {currentView === 'dashboard' && <Dashboard />}
               {currentView === 'institutions' && userType === 'admin' && <AdminInstitutions />}
+              {currentView === 'users' && userType === 'admin' && <UserManagement />}
               {currentView === 'stations' && (userType === 'institution' || userType === 'admin') && (
                 <StationManagement />
               )}

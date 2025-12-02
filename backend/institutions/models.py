@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from users.models import User
 
 
 class Institution(models.Model):
@@ -10,6 +11,7 @@ class Institution(models.Model):
     street = models.CharField(_('Calle'), max_length=100, blank=True, null=True)
     neighborhood = models.CharField(_('Barrio'), max_length=100, blank=True, null=True)
     validated = models.BooleanField(_('Validada'), default=False)
+    admin_id = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, db_column='admin_id', related_name='institutions_administered')
 
     class Meta:
         db_table = 'institution'

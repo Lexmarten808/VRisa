@@ -5,7 +5,7 @@ CREATE TABLE users (
     last_name VARCHAR(50)  NOT NULL,
     u_password VARCHAR(50) NOT NULL,
     creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- hora de creaccion
-    u_type VARCHAR(20) NOT NULL, --tipo de usuario: admin, regular,invitado (super_admin admite nuevos usuarios)
+    u_type VARCHAR(25) NOT NULL, --tipo de usuario: admin, regular,invitado (super_admin admite nuevos usuarios)
     validated BOOLEAN DEFAULT FALSE
 );
 ----------------- relaciones de contacto ------------------------
@@ -31,7 +31,8 @@ CREATE TABLE institution(
     color_set VARCHAR(50),  -- set de colores de la institucion
     street VARCHAR(100),    -- calle
     neighborhood VARCHAR(100), --barrio djanjo no soporta tipos personalizados
-    validated BOOLEAN DEFAULT FALSE
+    validated BOOLEAN DEFAULT FALSE,
+    admin_id INT REFERENCES users(id)
 );
 
 ------------------ estaciones ------------------------

@@ -94,6 +94,10 @@ def login_user(request):
         if not user:
             return Response({"error": "User not found"}, status=404)
 
+    # Block login for unvalidated users
+    if not user.validated:
+        return Response({"error": "El usuario no ha sido validado por el administrador"}, status=403)
+
     if user.u_password != password:
         return Response({"error": "Invalid password"}, status=400)
 
@@ -110,3 +114,85 @@ def login_user(request):
 @api_view(['GET'])
 def health(request):
     return Response({"status": "ok"})
+
+
+# ======================
+#  ADMIN: PENDING USERS
+# ======================
+@api_view(['GET'])
+def pending_users(request):
+    try:
+        users = User.objects.filter(validated=False).order_by('-creation_date')
+        data = []
+        for u in users:
+            email = Email.objects.filter(u_id=u).first()
+            data.append({
+                'id': u.id,
+                'u_name': u.u_name,
+                'last_name': u.last_name,
+                'u_type': u.u_type,
+                'email': email.email if email else None,
+                'validated': u.validated,
+                'creation_date': u.creation_date
+            })
+        return Response({'results': data})
+    except Exception as ex:
+        logger.exception('Error fetching pending users')
+        return Response({'error': 'Error fetching pending users', 'detail': str(ex)}, status=500)
+
+
+@api_view(['POST'])
+def approve_user(request, user_id: int):
+    try:
+        user = User.objects.filter(id=user_id).first()
+        if not user:
+            return Response({'error': 'User not found'}, status=404)
+        if user.validated:
+            return Response({'message': 'User already validated'})
+        user.validated = True
+        user.save(update_fields=['validated'])
+        return Response({'message': 'User approved', 'user_id': user.id})
+    except Exception as ex:
+        logger.exception('Error approving user')
+        return Response({'error': 'Error approving user', 'detail': str(ex)}, status=500)
+
+
+@api_view(['POST'])
+def reject_user(request, user_id: int):
+    try:
+        user = User.objects.filter(id=user_id).first()
+        if not user:
+            return Response({'error': 'User not found'}, status=404)
+        # Cascade delete will remove related emails/phones
+        user.delete()
+        return Response({'message': 'User rejected and removed', 'user_id': user_id})
+    except Exception as ex:
+        logger.exception('Error rejecting user')
+        return Response({'error': 'Error rejecting user', 'detail': str(ex)}, status=500)
+
+
+# ======================
+#  USER STATUS BY EMAIL
+# ======================
+@api_view(['GET'])
+def user_status(request):
+    try:
+        email = (request.query_params.get('email') or '').strip()
+        if not email:
+            return Response({'error': 'Missing email'}, status=400)
+        email_obj = Email.objects.filter(email__iexact=email).first()
+        if not email_obj:
+            return Response({'exists': False, 'validated': False})
+        user = email_obj.u_id
+        return Response({
+            'exists': True,
+            'validated': user.validated,
+            'user_id': user.id,
+            'u_type': user.u_type,
+            'u_name': user.u_name,
+            'last_name': user.last_name,
+            'email': email_obj.email
+        })
+    except Exception as ex:
+        logger.exception('Error fetching user status')
+        return Response({'error': 'Error fetching status', 'detail': str(ex)}, status=500)

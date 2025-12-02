@@ -5,4 +5,4 @@ from .models import Institution
 class InstitutionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Institution
-        fields = ['institution_id', 'i_name', 'logo', 'color_set', 'street', 'neighborhood', 'validated']
+        fields = ['institution_id', 'i_name', 'logo', 'color_set', 'street', 'neighborhood', 'validated', 'admin_id']

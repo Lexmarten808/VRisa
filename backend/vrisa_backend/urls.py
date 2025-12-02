@@ -16,8 +16,23 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import include, path
+from rest_framework.routers import DefaultRouter
+from institutions.views import InstitutionViewSet
+from institutions.views import register_institution_with_user, approve_institution
+from stations.views import StationViewSet
+from sensors.views import SensorViewSet
+from measurements.views import MeasurementViewSet
+
+router = DefaultRouter()
+router.register(r'institutions', InstitutionViewSet, basename='institutions')
+router.register(r'stations', StationViewSet, basename='stations')
+router.register(r'sensors', SensorViewSet, basename='sensors')
+router.register(r'measurements', MeasurementViewSet, basename='measurements')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-     path('api/users/', include('users.urls')),
+    path('api/users/', include('users.urls')),
+    path('api/institutions/register_with_user/', register_institution_with_user),
+    path('api/institutions/approve/<int:institution_id>/', approve_institution),
+    path('api/', include(router.urls)),
 ]

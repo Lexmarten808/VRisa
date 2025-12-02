@@ -4,16 +4,19 @@
 -- 1) users
 INSERT INTO users (u_name, last_name, u_password, u_type, validated)
 VALUES
-('Ana', 'Gómez', 'pass123', 'regular', TRUE),
-('Luis', 'Pérez', 'pass123', 'regular', TRUE),
+('Ana', 'Gómez', 'pass123', 'ciudadano', TRUE),
+('Luis', 'Pérez', 'pass123', 'ciudadano', TRUE),
 ('María', 'Rodríguez', 'pass123', 'admin', TRUE),
-('Jorge', 'López', 'pass123', 'institution', TRUE),
-('Camila', 'Martínez', 'pass123', 'regular', FALSE),
-('Diego', 'Torres', 'pass123', 'regular', TRUE),
-('Sofía', 'Ramírez', 'pass123', 'regular', TRUE),
+('Jorge', 'López', 'pass123', 'institucion', TRUE),
+('Camila', 'Martínez', 'pass123', 'ciudadano', FALSE),
+('Diego', 'Torres', 'pass123', 'ciudadano', TRUE),
+('Sofía', 'Ramírez', 'pass123', 'ciudadano', TRUE),
 ('Andrés', 'Castro', 'pass123', 'admin', TRUE),
-('Valeria', 'Suárez', 'pass123', 'regular', FALSE),
-('Carlos', 'Herrera', 'pass123', 'institution', TRUE);
+('Valeria', 'Suárez', 'pass123', 'ciudadano', FALSE),
+('Carlos', 'Herrera', 'pass123', 'institucion', TRUE),
+-- Usuarios administradores de estaciones
+('Pedro', 'Quintero', 'pass123', 'administrador_estacion', TRUE),
+('Laura', 'Patiño', 'pass123', 'administrador_estacion', TRUE);
 
 -- 2) email (references users)
 INSERT INTO email (u_id, email)
@@ -27,7 +30,9 @@ VALUES
 (7, 'sofia.ramirez@example.com'),
 (8, 'andres.castro@example.com'),
 (9, 'valeria.suarez@example.com'),
-(10, 'carlos.herrera@institucion.edu');
+(10, 'carlos.herrera@institucion.edu'),
+(11, 'pedro.quintero@stations.com'),
+(12, 'laura.patino@stations.com');
 
 -- 3) phone_number (references users)
 INSERT INTO phone_number (u_id, p_number)
@@ -41,21 +46,23 @@ VALUES
 (7, '+57 3007777777'),
 (8, '+57 3008888888'),
 (9, '+57 3009999999'),
-(10, '+57 3010000000');
+(10, '+57 3010000000'),
+(11, '+57 3011111111'),
+(12, '+57 3012222222');
 
 -- 4) institution
-INSERT INTO institution (i_name, logo, color_set, street, neighborhood, validated)
+INSERT INTO institution (i_name, logo, color_set, street, neighborhood, validated, admin_id)
 VALUES
-('Universidad del Valle', 'univalle.png', 'red-white', 'Calle 13 #100', 'Ciudad Universitaria', TRUE),
-('Instituto Ambiental Andino', 'andino.png', 'green-white', 'Av. Bosque 12', 'El Bosque', TRUE),
-('Centro de Meteorología Pacífico', 'pacifico.png', 'blue-gray', 'Cra 45 #15', 'San Antonio', TRUE),
-('Fundación Aire Limpio', 'aire.png', 'teal-white', 'Calle 5 #25', 'Santa Mónica', TRUE),
-('Observatorio Climático Norte', 'norte.png', 'navy-white', 'Av. Norte 33', 'La Flora', FALSE),
-('Parque Tecnológico Valle', 'ptv.png', 'orange-white', 'Cra 10 #20', 'ValleTech', TRUE),
-('Centro de Investigación Andina', 'cia.png', 'green-gray', 'Calle 9 #8', 'Andes', TRUE),
-('Alianza por el Clima', 'apc.png', 'purple-white', 'Av. Central 7', 'Centro', TRUE),
-('Red de Estaciones Urbanas', 'reu.png', 'yellow-black', 'Cra 20 #40', 'Urbano', FALSE),
-('Instituto del Agua', 'agua.png', 'cyan-white', 'Calle 1 #2', 'Río', TRUE);
+('Universidad del Valle', 'univalle.png', 'red-white', 'Calle 13 #100', 'Ciudad Universitaria', TRUE, 4),
+('Instituto Ambiental Andino', 'andino.png', 'green-white', 'Av. Bosque 12', 'El Bosque', TRUE, 10),
+('Centro de Meteorología Pacífico', 'pacifico.png', 'blue-gray', 'Cra 45 #15', 'San Antonio', TRUE, 4),
+('Fundación Aire Limpio', 'aire.png', 'teal-white', 'Calle 5 #25', 'Santa Mónica', TRUE, 10),
+('Observatorio Climático Norte', 'norte.png', 'navy-white', 'Av. Norte 33', 'La Flora', FALSE, 4),
+('Parque Tecnológico Valle', 'ptv.png', 'orange-white', 'Cra 10 #20', 'ValleTech', TRUE, 10),
+('Centro de Investigación Andina', 'cia.png', 'green-gray', 'Calle 9 #8', 'Andes', TRUE, 4),
+('Alianza por el Clima', 'apc.png', 'purple-white', 'Av. Central 7', 'Centro', TRUE, 10),
+('Red de Estaciones Urbanas', 'reu.png', 'yellow-black', 'Cra 20 #40', 'Urbano', FALSE, 4),
+('Instituto del Agua', 'agua.png', 'cyan-white', 'Calle 1 #2', 'Río', TRUE, 10);
 
 -- 5) station (references users as admin_id and institution)
 -- Assume admins: user IDs 3 and 8; institutions 1..10
