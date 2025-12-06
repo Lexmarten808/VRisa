@@ -25,6 +25,8 @@ interface LoginProps {
 
 
 export function Login({ onLogin }: LoginProps) {
+  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+  const api = axios.create({ baseURL: API_BASE });
   const [isRegistering, setIsRegistering] = useState(false);
   const [regError, setRegError] = useState<string>('');
   const [regLoading, setRegLoading] = useState(false);
@@ -47,6 +49,7 @@ export function Login({ onLogin }: LoginProps) {
   const [instStreet, setInstStreet] = useState('');
   const [instNeighborhood, setInstNeighborhood] = useState('');
   const [instColorSet, setInstColorSet] = useState('');
+  const [instLogoName, setInstLogoName] = useState('');
   const [instAdminEmail, setInstAdminEmail] = useState('');
   const [instAdminPassword, setInstAdminPassword] = useState('');
 
@@ -57,7 +60,7 @@ export function Login({ onLogin }: LoginProps) {
     const emailInput = loginEmail.trim();
     const passwordInput = loginPassword;
     try {
-      const response = await axios.post('http://127.0.0.1:8000/api/users/login/', {
+      const response = await api.post('/api/users/login/', {
         identifier: emailInput,
         password: passwordInput,
       });
@@ -91,11 +94,11 @@ export function Login({ onLogin }: LoginProps) {
     const u_password = regPassword;
     const u_type = regRole === 'ciudadano' ? 'regular' : 'station_admin';
     try {
-      await axios.post('http://127.0.0.1:8000/api/users/register/', {
+      await api.post('/api/users/register/', {
         u_name, last_name, u_password, email, phone, u_type, station_id: regRole === 'administrador_estacion' ? regStationId.trim() : undefined
       });
       // Auto-login right after successful registration
-      const loginResp = await axios.post('http://127.0.0.1:8000/api/users/login/', {
+      const loginResp = await api.post('/api/users/login/', {
         identifier: email,
         password: u_password
       });
@@ -120,11 +123,12 @@ export function Login({ onLogin }: LoginProps) {
     setRegLoading(true);
     try {
       // Endpoint atómico: crea usuario + institución
-      await axios.post('http://127.0.0.1:8000/api/institutions/register_with_user/', {
+      await api.post('/api/institutions/register_with_user/', {
         i_name: instName.trim(),
         street: instStreet.trim() || null,
         neighborhood: instNeighborhood.trim() || null,
         color_set: instColorSet.trim() || null,
+        logo: instLogoName || null,
         email: instAdminEmail,
         password: instAdminPassword
       });
@@ -136,6 +140,7 @@ export function Login({ onLogin }: LoginProps) {
       setInstStreet('');
       setInstNeighborhood('');
       setInstColorSet('');
+      setInstLogoName('');
       setInstAdminEmail('');
       setInstAdminPassword('');
     } catch (error: any) {
@@ -338,6 +343,21 @@ export function Login({ onLogin }: LoginProps) {
                 <div className="space-y-2">
                   <Label htmlFor="inst-colorset">Conjunto de Colores</Label>
                   <Input id="inst-colorset" placeholder="red-white" value={instColorSet} onChange={(e) => setInstColorSet(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="inst-logo">Logo (imagen)</Label>
+                  <Input
+                    id="inst-logo"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      setInstLogoName(file ? file.name : '');
+                    }}
+                  />
+                  {instLogoName && (
+                    <p className="text-xs text-gray-600">Archivo seleccionado: {instLogoName}</p>
+                  )}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">

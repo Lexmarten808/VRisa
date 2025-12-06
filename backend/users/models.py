@@ -12,7 +12,7 @@ class User(models.Model):
 
     class Meta:
         db_table = 'users'
-        # managed = False  # Indica que Django no debe gestionar la tabla
+        
 
     def __str__(self):
         return f"{self.u_name} {self.last_name}"
@@ -25,7 +25,7 @@ class Email(models.Model):
 
     class Meta:
         db_table = 'email'
-        # managed = False  # Indica que Django no debe gestionar la tabla
+        
 
 
     def __str__(self):
@@ -39,7 +39,7 @@ class PhoneNumber(models.Model):
 
     class Meta:
         db_table = 'phone_number'
-        # managed = False  # Indica que Django no debe gestionar la tabla
+       
 
 
     def __str__(self):

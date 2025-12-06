@@ -4,6 +4,7 @@ from rest_framework import status
 from django.db import IntegrityError, transaction
 import logging
 from .models import User, Email, PhoneNumber
+from stations.models import Station
 from .serializers import UserSerializer
 
 logger = logging.getLogger(__name__)
@@ -44,10 +45,33 @@ def register_user(request):
             if phone:
                 PhoneNumber.objects.create(u_id=user, p_number=phone)
 
-        return Response({
+            # If a station_id was provided and the user should be its admin, assign it.
+            station_id = request.data.get('station_id')
+            station_assignment = {"assigned": False, "station_id": None, "reason": None}
+            if station_id and u_type == 'admin':
+                try:
+                    # Use update() to avoid selecting columns that may not exist in the DB schema.
+                    station_assignment['station_id'] = station_id
+                    updated = Station.objects.filter(station_id=station_id, admin_id__isnull=True).update(admin_id=user)
+                    if updated:
+                        station_assignment['assigned'] = True
+                    else:
+                        # determine reason without selecting all station columns
+                        exists = Station.objects.filter(station_id=station_id).exists()
+                        station_assignment['reason'] = 'station not found' if not exists else 'station already has admin'
+                except Exception:
+                    logger.exception('Failed to assign station admin for station_id=%s', station_id)
+                    station_assignment['reason'] = 'assignment error'
+
+        resp_body = {
             "message": "Usuario creado correctamente",
             "user_id": user.id
-        }, status=status.HTTP_201_CREATED)
+        }
+        # include station assignment info when applicable
+        if 'station_assignment' in locals():
+            resp_body['station_assignment'] = station_assignment
+
+        return Response(resp_body, status=status.HTTP_201_CREATED)
     except IntegrityError as ie:
         logger.exception("Integrity error on register_user")
         return Response({"error": "Conflicto de datos (duplicado o inválido)", "detail": str(ie)}, status=400)
@@ -196,3 +220,22 @@ def user_status(request):
     except Exception as ex:
         logger.exception('Error fetching user status')
         return Response({'error': 'Error fetching status', 'detail': str(ex)}, status=500)
+
+
+@api_view(['GET'])
+def user_detail(request, user_id: int):
+    try:
+        user = User.objects.filter(id=user_id).first()
+        if not user:
+            return Response({'error': 'User not found'}, status=404)
+        email = Email.objects.filter(u_id=user).first()
+        return Response({
+            'user_id': user.id,
+            'u_name': user.u_name,
+            'last_name': user.last_name,
+            'u_type': user.u_type,
+            'email': email.email if email else None,
+        })
+    except Exception as ex:
+        logger.exception('Error fetching user detail')
+        return Response({'error': 'Error fetching user', 'detail': str(ex)}, status=500)

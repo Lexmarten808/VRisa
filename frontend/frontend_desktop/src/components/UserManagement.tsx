@@ -15,6 +15,8 @@ type PendingUser = {
 };
 
 export function UserManagement() {
+  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+  const api = axios.create({ baseURL: API_BASE });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [users, setUsers] = useState<PendingUser[]>([]);
@@ -24,7 +26,7 @@ export function UserManagement() {
     setLoading(true);
     setError('');
     try {
-      const resp = await axios.get('http://127.0.0.1:8000/api/users/pending/');
+      const resp = await api.get('/api/users/pending/');
       setUsers(resp.data?.results || []);
     } catch (e: any) {
       const msg = e?.response?.data?.error || 'No se pudo cargar la lista';
@@ -42,7 +44,7 @@ export function UserManagement() {
     setActionBusy(id);
     setError('');
     try {
-      await axios.post(`http://127.0.0.1:8000/api/users/approve/${id}/`);
+      await api.post(`/api/users/approve/${id}/`);
       setUsers((prev) => prev.filter((u) => u.id !== id));
     } catch (e: any) {
       const msg = e?.response?.data?.error || 'No se pudo aprobar el usuario';
@@ -56,7 +58,7 @@ export function UserManagement() {
     setActionBusy(id);
     setError('');
     try {
-      await axios.post(`http://127.0.0.1:8000/api/users/reject/${id}/`);
+      await api.post(`/api/users/reject/${id}/`);
       setUsers((prev) => prev.filter((u) => u.id !== id));
     } catch (e: any) {
       const msg = e?.response?.data?.error || 'No se pudo rechazar el usuario';

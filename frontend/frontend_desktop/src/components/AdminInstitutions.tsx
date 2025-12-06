@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Building2, Check, Eye, MoreVertical, Settings, X } from 'lucide-react';
+import { Building2, Check, Eye, Settings, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Label } from './ui/label';
 
 type Institution = {
@@ -20,13 +19,15 @@ type Institution = {
 };
 
 export function AdminInstitutions() {
+  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+  const api = axios.create({ baseURL: API_BASE });
   const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [selectedInstitution, setSelectedInstitution] = useState<Institution | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const loadInstitutions = async () => {
     try {
-      const resp = await axios.get('http://127.0.0.1:8000/api/institutions/');
+      const resp = await api.get('/api/institutions/');
       const items: Institution[] = (resp.data || []).map((i: any) => ({
         id: i.institution_id,
         name: i.i_name,
@@ -55,7 +56,7 @@ export function AdminInstitutions() {
 
   const handleApprove = async (institution: Institution) => {
     try {
-      await axios.post(`http://127.0.0.1:8000/api/institutions/approve/${institution.id}/`);
+      await api.post(`/api/institutions/approve/${institution.id}/`);
       setDialogOpen(false);
       loadInstitutions();
     } catch (e) {
@@ -99,28 +100,22 @@ export function AdminInstitutions() {
                 <TableCell>{institution.address}</TableCell>
                 <TableCell>{getStatusBadge(institution.status)}</TableCell>
                 <TableCell className="text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <MoreVertical className="h-4 w-4" />
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" size="sm" onClick={() => viewDetails(institution)}>
+                      <Eye className="h-4 w-4 mr-2" />
+                      Detalles
+                    </Button>
+                    {institution.status === 'pending' && (
+                      <Button
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => handleApprove(institution)}
+                      >
+                        <Check className="h-4 w-4 mr-2" />
+                        Aprobar
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => viewDetails(institution)}>
-                        <Eye className="h-4 w-4 mr-2" /> Ver Detalles
-                      </DropdownMenuItem>
-                      {institution.status === 'pending' && (
-                        <>
-                          <DropdownMenuItem onClick={() => handleApprove(institution)}>
-                            <Check className="h-4 w-4 mr-2" /> Aceptar institución
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleReject(institution)}>
-                            <X className="h-4 w-4 mr-2" /> Rechazar
-                          </DropdownMenuItem>
-                        </>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -128,8 +123,13 @@ export function AdminInstitutions() {
         </Table>
       </div>
 
+      {/* Backdrop to improve readability when dialog is open */}
+      {dialogOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40" />
+      )}
+
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl z-50">
           <DialogHeader>
             <DialogTitle>Detalles de la Institución</DialogTitle>
             <DialogDescription>

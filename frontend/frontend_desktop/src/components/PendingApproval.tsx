@@ -10,6 +10,8 @@ interface PendingApprovalProps {
 }
 
 export function PendingApproval({ email, onBack }: PendingApprovalProps) {
+  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+  const api = axios.create({ baseURL: API_BASE });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [validated, setValidated] = useState<boolean | null>(null);
@@ -18,7 +20,7 @@ export function PendingApproval({ email, onBack }: PendingApprovalProps) {
     setLoading(true);
     setError('');
     try {
-      const resp = await axios.get('http://127.0.0.1:8000/api/users/status/', { params: { email } });
+      const resp = await api.get('/api/users/status/', { params: { email } });
       setValidated(!!resp.data?.validated);
     } catch (e: any) {
       const msg = e?.response?.data?.error || 'No se pudo consultar el estado';

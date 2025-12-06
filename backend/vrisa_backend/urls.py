@@ -26,6 +26,7 @@ from measurements.views import MeasurementViewSet
 router = DefaultRouter()
 router.register(r'institutions', InstitutionViewSet, basename='institutions')
 router.register(r'stations', StationViewSet, basename='stations')
+# station-requests endpoints removed to match DDL/DML-only setup
 router.register(r'sensors', SensorViewSet, basename='sensors')
 router.register(r'measurements', MeasurementViewSet, basename='measurements')
 

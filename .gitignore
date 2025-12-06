@@ -1,0 +1,19 @@
+# Python virtual environments
+.venv/
+backend/.venv/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+
+# Environment files
+.env
+*.env
+
+# Node.js
+frontend/frontend_desktop/node_modules/
+frontend/frontend_mobile/vrisa/node_modules/
+
+# Logs and OS files
+*.log
+.DS_Store

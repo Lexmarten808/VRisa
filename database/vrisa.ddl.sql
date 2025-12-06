@@ -5,7 +5,7 @@ CREATE TABLE users (
     last_name VARCHAR(50)  NOT NULL,
     u_password VARCHAR(50) NOT NULL,
     creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- hora de creaccion
-    u_type VARCHAR(25) NOT NULL, --tipo de usuario: admin, regular,invitado (super_admin admite nuevos usuarios)
+    u_type VARCHAR(25) NOT NULL, --tipo de usuario: admin, ciudadano, institucion, administrador_estacion
     validated BOOLEAN DEFAULT FALSE
 );
 ----------------- relaciones de contacto ------------------------

@@ -132,9 +132,9 @@ export default function App() {
     },
     {
       id: 'stations' as View,
-      label: 'Gestión de Estaciones',
+      label: 'Estaciones de Monitoreo',
       icon: Radio,
-      roles: ['institution', 'admin'],
+      roles: [], // visibility handled below via station-admin check
     },
     {
       id: 'reports' as View,
@@ -144,8 +144,19 @@ export default function App() {
     },
   ];
 
-  // Filtrar elementos según el tipo de usuario (comportamiento original)
-  const visibleMenuItems = menuItems.filter((item) => item.roles.includes(userType || 'public'));
+  // Determinar si el usuario es administrador de estación por su tipo bruto
+  const isStationAdmin = (() => {
+    const raw = (userInfo?.u_type || '').toLowerCase();
+    return raw === 'station_admin' || raw === 'administrador_estacion' || raw === 'admin_estacion';
+  })();
+
+  const isInstitutionUser = userType === 'institution';
+
+  // Filtrar elementos segun tipo y visibilidad especial para estaciones
+  const visibleMenuItems = menuItems.filter((item) => {
+    if (item.id === 'stations') return isStationAdmin || isInstitutionUser; // admins de estación o institución
+    return item.roles.includes(userType || 'public');
+  });
 
   const getUserLabel = () => {
     if (userInfo?.name) {
@@ -356,9 +367,7 @@ export default function App() {
               {currentView === 'dashboard' && <Dashboard />}
               {currentView === 'institutions' && userType === 'admin' && <AdminInstitutions />}
               {currentView === 'users' && userType === 'admin' && <UserManagement />}
-              {currentView === 'stations' && (userType === 'institution' || userType === 'admin') && (
-                <StationManagement />
-              )}
+              {currentView === 'stations' && (isStationAdmin || isInstitutionUser) && <StationManagement />}
               {currentView === 'reports' && <Reports />}
             </>
           )}
