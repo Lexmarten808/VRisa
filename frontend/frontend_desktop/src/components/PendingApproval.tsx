@@ -10,7 +10,7 @@ interface PendingApprovalProps {
 }
 
 export function PendingApproval({ email, onBack }: PendingApprovalProps) {
-  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+  const API_BASE = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:8000';
   const api = axios.create({ baseURL: API_BASE });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');

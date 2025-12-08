@@ -43,7 +43,7 @@ import { Textarea } from './ui/textarea';
 import axios from 'axios';
 
 export function StationManagement() {
-  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+  const API_BASE = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:8000';
   const api = useMemo(() => axios.create({ baseURL: API_BASE }), [API_BASE]);
   const [selectedStation, setSelectedStation] = useState<any>(null);
   const [stationAddress, setStationAddress] = useState<string | null>(null);
@@ -133,7 +133,11 @@ export function StationManagement() {
       }
       const resp = await api.get('/api/stations/', { params });
       const items = Array.isArray(resp.data) ? resp.data : (resp.data?.results ?? []);
-      setConnectionRequests(items || []);
+      // Filter out requests for stations that already have an institution assigned (approved)
+      const pending = (items || []).filter((it: any) => {
+        return !(it.institution || it.institution_id);
+      });
+      setConnectionRequests(pending);
     } catch (e) {
       console.error('No se pudieron cargar solicitudes de conexión', e);
       setConnectionRequests([]);
@@ -150,16 +154,16 @@ export function StationManagement() {
   }, [userInfo?.user_id, isInstitutionUser]);
 
   const filteredStations = stations.filter((station) => {
-    // Si es admin de estación, solo mostrar estaciones activas (approved/active)
+    // Mostrar todas las estaciones para administradores; institución sigue viendo todas
     const state = station.s_state || station.status;
-    const adminViewOk = !isInstitutionUser ? (state === 'active' || state === 'approved') : true;
+    const adminViewOk = true;
     const matchesSearch =
       (station.s_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (station.institution?.i_name || '').toLowerCase().includes(searchQuery.toLowerCase());
     return adminViewOk && matchesSearch;
   });
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status?: string) => {
     const s = (status || '').toLowerCase();
     switch (s) {
       case 'approved':
@@ -178,6 +182,8 @@ export function StationManagement() {
       case 'maintenance':
         return <Badge className="bg-amber-600">Mantenimiento</Badge>;
       default:
+        // If there's no explicit status, treat as not approved
+        if (!status) return <Badge className="bg-amber-500">Sin aprobar</Badge>;
         return <Badge className="bg-gray-500">Desconocido</Badge>;
     }
   };
@@ -210,8 +216,21 @@ export function StationManagement() {
       setConnectionRequests((prev) => (prev || []).filter((r) => Number(r.station_id) !== Number(stationId)));
       // Refresh stations listing to reflect the new assignment/state
       await loadStations();
+      await loadConnectionRequests();
     } catch (e) {
       console.error('No se pudo aprobar la solicitud', e);
+    }
+  };
+
+  const updateStationState = async (stationId: number, stateValue: string) => {
+    try {
+      setSubmitting(true);
+      await api.post(`/api/stations/${stationId}/set_state/`, { s_state: stateValue, admin_id: userInfo?.user_id });
+      await loadStations();
+    } catch (e) {
+      console.error('No se pudo cambiar el estado', e);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -224,33 +243,7 @@ export function StationManagement() {
       console.error('No se pudo rechazar la solicitud', e);
     }
   };
-
-  const handleApprove = async (station: any) => {
-    try {
-      const resp = await api.post(`/api/station-requests/${station.request_id}/approve/`, {
-        decider_id: userInfo?.user_id,
-      });
-      setDialogOpen(false);
-      // Mostrar credenciales
-      setSelectedStation({ ...station, _credentials: resp.data?.credentials });
-      setCredentialsDialogOpen(true);
-      loadRequests();
-    } catch (e) {
-      console.error('Error al aprobar', e);
-    }
-  };
-
-  const handleReject = async (station: any) => {
-    try {
-      await api.post(`/api/station-requests/${station.request_id}/reject/`, {
-        decider_id: userInfo?.user_id,
-      });
-      setDialogOpen(false);
-      loadRequests();
-    } catch (e) {
-      console.error('Error al rechazar', e);
-    }
-  };
+  
 
   const viewDetails = (station: any) => {
     setSelectedStation(station);
@@ -483,7 +476,7 @@ export function StationManagement() {
                     </div>
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <span className="font-medium text-gray-700">Estado:</span>
-                      <span>{station.s_state || station.status || '—'}</span>
+                      <span>{(station.s_state || station.status) ? (station.s_state || station.status) : 'Sin aprobar'}</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <span className="font-medium text-gray-700">Ubicación:</span>
@@ -492,23 +485,27 @@ export function StationManagement() {
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
-                    <Button variant="ghost" size="sm" onClick={() => viewDetails(station)}>
-                      <Eye className="h-4 w-4 mr-2" />
-                      Ver detalles
-                    </Button>
-
-                    {(station.s_state === 'active' || station.status === 'approved') && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedStation(station);
-                          setCredentialsDialogOpen(true);
-                        }}
-                      >
-                        <Key className="h-4 w-4 mr-2" />
-                        Credenciales
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => viewDetails(station)}>
+                        <Eye className="h-4 w-4 mr-2" />
+                        Ver detalles
                       </Button>
+                    </div>
+
+                    {/* State selector for station admins */}
+                    {Number(station?.admin_id?.id || station?.admin_id) === Number(userInfo?.user_id) && (
+                      <div className="flex items-center gap-2">
+                        <Select value={station.s_state || station.status || ''} onValueChange={(val) => updateStationState(station.station_id, val)}>
+                          <SelectTrigger className="w-40">
+                            <SelectValue placeholder="Estado" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="active">Activo</SelectItem>
+                            <SelectItem value="inactive">Inactivo</SelectItem>
+                            <SelectItem value="maintenance">Mantenimiento</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -537,7 +534,7 @@ export function StationManagement() {
                   <div>
                     <h3>{selectedStation.s_name}</h3>
                   </div>
-                  {getStatusBadge(selectedStation.status)}
+                  {getStatusBadge((selectedStation.institution || selectedStation.institution_id) ? 'approved' : undefined)}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -583,38 +580,11 @@ export function StationManagement() {
                 </div>
               </div>
 
-              {selectedStation.status === 'pending' && (
-                <div className="space-y-2">
-                  <Label htmlFor="review-notes">Notas de Revisión</Label>
-                  <Textarea
-                    id="review-notes"
-                    placeholder="Agrega comentarios o razones para la decisión..."
-                    rows={3}
-                  />
-                </div>
-              )}
+              {/* Notas y acciones de aprobación eliminadas: la aprobación la determina la institución */}
             </div>
           )}
-
           <DialogFooter>
-            {selectedStation?.status === 'pending' && (
-              <>
-                <Button variant="outline" onClick={() => handleReject(selectedStation)}>
-                  <X className="h-4 w-4 mr-2" />
-                  Rechazar
-                </Button>
-                <Button onClick={() => handleApprove(selectedStation)}>
-                  <Check className="h-4 w-4 mr-2" />
-                  Aprobar Estación
-                </Button>
-              </>
-            )}
-            {selectedStation?.status === 'approved' && (
-              <Button onClick={() => setCredentialsDialogOpen(true)}>
-                <Key className="h-4 w-4 mr-2" />
-                Ver Credenciales
-              </Button>
-            )}
+            <Button onClick={() => setDialogOpen(false)}>Cerrar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

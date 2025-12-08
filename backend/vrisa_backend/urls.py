@@ -36,4 +36,6 @@ urlpatterns = [
     path('api/institutions/register_with_user/', register_institution_with_user),
     path('api/institutions/approve/<int:institution_id>/', approve_institution),
     path('api/', include(router.urls)),
+    path('api/variables/', include('variables.urls')),
+    path('api/reports/', include('reports.urls')),
 ]

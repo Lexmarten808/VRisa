@@ -42,7 +42,7 @@ CREATE TABLE station(
     lat DECIMAL(9,6) NOT NULL,
     lon DECIMAL(9,6) NOT NULL,
     calibration_certificate VARCHAR(100),
-    maintenance_date TIMESTAMP,
+    maintenance_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     admin_id INT REFERENCES users(id),
     s_state VARCHAR(20) NOT NULL, -- activo, inactivo, mantenimiento
     institution_id INT REFERENCES institution(institution_id) ON DELETE SET NULL

@@ -1,162 +1,128 @@
 import { MapPin } from 'lucide-react';
-import { Station } from '../lib/mockData';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
+import { MapContainer, TileLayer, CircleMarker, Popup, useMap, Circle } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 
 interface MapViewProps {
-  stations: Station[];
-  onStationSelect?: (station: Station) => void;
-  selectedStation?: Station | null;
+  stations: any[];
+  onStationSelect?: (station: any) => void;
+  selectedStation?: any | null;
+  hotspots?: { lat: number; lon: number; intensity: number }[];
 }
 
-const getStatusColor = (status: string) => {
-  switch (status) {
+const getMarkerColor = (status: string) => {
+  switch ((status || '').toString().toLowerCase()) {
     case 'good':
-      return 'bg-green-500';
+      return '#16a34a'; // green
     case 'moderate':
-      return 'bg-yellow-500';
+      return '#eab308'; // yellow
     case 'unhealthy':
-      return 'bg-orange-500';
+      return '#f97316'; // orange
     case 'critical':
-      return 'bg-red-500';
+      return '#ef4444'; // red
     default:
-      return 'bg-gray-500';
+      return '#6b7280'; // gray
   }
 };
 
-const getStatusText = (status: string) => {
-  switch (status) {
-    case 'good':
-      return 'Bueno';
-    case 'moderate':
-      return 'Moderado';
-    case 'unhealthy':
-      return 'No Saludable';
-    case 'critical':
-      return 'Crítico';
-    default:
-      return 'Desconocido';
+function FitBounds({ stations }: { stations: any[] }) {
+  const map = useMap();
+  if (!stations || stations.length === 0) return null;
+  const points: [number, number][] = [];
+  for (const s of stations) {
+    const lat = Number(s.lat ?? s.latitude ?? s.latitude_deg);
+    const lon = Number(s.lon ?? s.longitude ?? s.longitude_deg ?? s.lng ?? s.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    points.push([lat, lon]);
   }
-};
+  if (points.length === 0) return null;
+  try {
+    map.fitBounds(points, { padding: [40, 40] });
+  } catch (e) {
+    // ignore
+  }
+  return null;
+}
 
-export function MapView({ stations, onStationSelect, selectedStation }: MapViewProps) {
+export function MapView({ stations, onStationSelect, selectedStation, hotspots }: MapViewProps) {
+  // Default center on Cali, Valle del Cauca
+  const defaultCenter: [number, number] = [3.43722, -76.5225];
+  const defaultZoom = 12;
+
   return (
     <Card className="h-full">
-      <CardContent className="p-6">
-        <div className="relative w-full h-[500px] bg-gradient-to-br from-blue-50 to-green-50 rounded-lg overflow-hidden border-2 border-gray-200">
-          {/* Mapa de Cali - visualización simplificada */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-gray-400 text-center">
-              <MapPin className="h-16 w-16 mx-auto mb-2" />
-              <p>Mapa de Cali, Colombia</p>
-            </div>
-          </div>
+      <CardContent className="p-0">
+        <div className="w-full h-[100%] min-h-[400px]">
+          {/* cast MapContainer props to any to avoid TypeScript incompatibilities between react-leaflet versions */}
+          <MapContainer {...({ center: defaultCenter, zoom: defaultZoom, style: { width: '100%', height: '100%' } } as any)}>
+            {/* cast props to any to satisfy differing TileLayer prop types across react-leaflet versions */}
+            <TileLayer {...({ attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' } as any)} />
 
-          {/* Estaciones en el mapa */}
-          {stations.map((station) => {
-            // Convertir coordenadas reales a posición en el contenedor (simplificado)
-            const left = ((station.lng + 76.56) * 8000) % 100;
-            const top = ((3.48 - station.lat) * 8000) % 100;
+            <FitBounds stations={stations} />
 
-            return (
-              <div
-                key={station.id}
-                className="absolute cursor-pointer transform -translate-x-1/2 -translate-y-1/2"
-                style={{ left: `${left}%`, top: `${top}%` }}
-                onClick={() => onStationSelect?.(station)}
-              >
-                <div className="relative group">
-                  <div
-                    className={`w-8 h-8 rounded-full ${getStatusColor(
-                      station.status
-                    )} opacity-30 animate-pulse absolute inset-0 transform scale-150`}
-                  ></div>
-                  <div
-                    className={`w-8 h-8 rounded-full ${getStatusColor(
-                      station.status
-                    )} border-4 border-white shadow-lg flex items-center justify-center relative z-10`}
-                  >
-                    <MapPin className="h-4 w-4 text-white" />
-                  </div>
-
-                  {/* Tooltip */}
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-20">
-                    <div className="bg-white rounded-lg shadow-xl p-3 whitespace-nowrap border-2 border-gray-200">
-                      <div className="font-semibold">{station.name}</div>
-                      <div className="text-sm text-gray-600">{station.institution}</div>
-                      <Badge
-                        className={`mt-1 ${
-                          station.status === 'good'
-                            ? 'bg-green-500'
-                            : station.status === 'moderate'
-                            ? 'bg-yellow-500'
-                            : station.status === 'unhealthy'
-                            ? 'bg-orange-500'
-                            : 'bg-red-500'
-                        }`}
-                      >
-                        {getStatusText(station.status)}
-                      </Badge>
+            {/* Station markers */}
+            {stations.map((station, idx) => {
+              const lat = Number(station.lat ?? station.latitude ?? station.latitude_deg);
+              const lon = Number(station.lon ?? station.longitude ?? station.longitude_deg ?? station.lng ?? station.longitude);
+              if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+              const key = station.station_id ?? station.id ?? station.s_name ?? station.name ?? idx;
+              const status = (station.status || station.s_state || 'unknown').toString();
+              const color = getMarkerColor(status);
+              const radius = selectedStation && (selectedStation.station_id ?? selectedStation.id) === (station.station_id ?? station.id) ? 10 : 6;
+              const markerProps = {
+                center: [lat, lon],
+                pathOptions: { color, fillColor: color, fillOpacity: 0.9, weight: 1 },
+                radius,
+                eventHandlers: { click: () => onStationSelect?.(station) }
+              };
+              return (
+                <CircleMarker key={String(key)} {...(markerProps as any)}>
+                  <Popup>
+                    <div className="space-y-1">
+                      <div className="font-semibold">{station.s_name || station.name || String(key)}</div>
+                      <div className="text-sm text-gray-600">{station.institution?.i_name || station.institution || ''}</div>
+                      <div className="text-xs">{`Ubicación: ${lat.toFixed(5)}, ${lon.toFixed(5)}`}</div>
                     </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                  </Popup>
+                </CircleMarker>
+              );
+            })}
+
+            {/* Hotspots as semi-transparent circles */}
+            {(hotspots || []).map((h, i) => {
+              const lat = Number(h.lat);
+              const lon = Number(h.lon);
+              if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+              const intensity = Number(h.intensity ?? 0);
+              const color = intensity > 100 ? '#ef4444' : intensity > 50 ? '#f97316' : '#facc15';
+              // approximate radius in meters (visual only)
+              const radius = Math.min(2000, Math.max(200, intensity * 30));
+              const circleProps = { center: [lat, lon], radius, pathOptions: { color, fillColor: color, fillOpacity: 0.18, weight: 0 } };
+              return <Circle key={`hot-${i}`} {...(circleProps as any)} />;
+            })}
+          </MapContainer>
         </div>
 
-        {/* Estación seleccionada */}
-        {selectedStation && (
-          <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <div className="flex items-start justify-between mb-2">
-              <div>
-                <div className="font-semibold">Estación: {selectedStation.name}</div>
-                <div className="text-sm text-gray-600">{selectedStation.institution}</div>
-              </div>
-              <Badge
-                className={`${
-                  selectedStation.status === 'good'
-                    ? 'bg-green-500'
-                    : selectedStation.status === 'moderate'
-                    ? 'bg-yellow-500'
-                    : selectedStation.status === 'unhealthy'
-                    ? 'bg-orange-500'
-                    : 'bg-red-500'
-                }`}
-              >
-                {getStatusText(selectedStation.status)}
-              </Badge>
-            </div>
-            <div className="grid grid-cols-2 gap-2 mt-3">
-              {selectedStation.pollutants.map((pollutant) => (
-                <div key={pollutant.pollutant} className="bg-white p-2 rounded border">
-                  <div className="text-xs text-gray-600">{pollutant.pollutant}</div>
-                  <div className="font-semibold">
-                    {pollutant.value} {pollutant.unit}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Leyenda */}
-        <div className="mt-4 flex flex-wrap gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-green-500"></div>
-            <span className="text-sm">Bueno</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-yellow-500"></div>
-            <span className="text-sm">Moderado</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-orange-500"></div>
-            <span className="text-sm">No Saludable</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-red-500"></div>
-            <span className="text-sm">Crítico</span>
+        <div className="p-3">
+          <div className="flex flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full" style={{ background: '#16a34a' }}></div>
+              <span className="text-sm">Bueno</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full" style={{ background: '#eab308' }}></div>
+              <span className="text-sm">Moderado</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full" style={{ background: '#f97316' }}></div>
+              <span className="text-sm">No Saludable</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full" style={{ background: '#ef4444' }}></div>
+              <span className="text-sm">Crítico</span>
+            </div>
           </div>
         </div>
       </CardContent>

@@ -47,24 +47,41 @@ def register_user(request):
 
             # If a station_id was provided and the user should be its admin, assign it.
             station_id = request.data.get('station_id')
-            station_assignment = {"assigned": False, "station_id": None, "reason": None}
-            if station_id and u_type == 'admin':
+            station_assignment = {"assigned": False, "station_id": None, "reason": None, "station": None}
+            if station_id and u_type == 'station_admin':
                 try:
+                    # normalize station_id to int when possible
+                    try:
+                        station_id_int = int(station_id)
+                    except Exception:
+                        station_id_int = None
+                    station_assignment['station_id'] = station_id_int or station_id
+
                     # Use update() to avoid selecting columns that may not exist in the DB schema.
-                    station_assignment['station_id'] = station_id
-                    updated = Station.objects.filter(station_id=station_id, admin_id__isnull=True).update(admin_id=user)
+                    # update() requires the FK value (pk)
+                    if station_id_int is not None:
+                        updated = Station.objects.filter(station_id=station_id_int, admin_id__isnull=True).update(admin_id=user.id)
+                    else:
+                        updated = Station.objects.filter(station_id=station_id, admin_id__isnull=True).update(admin_id=user.id)
+
                     if updated:
                         station_assignment['assigned'] = True
+                        # return minimal station info to the client so it can confirm assignment
+                        try:
+                            st = Station.objects.filter(station_id=station_id_int if station_id_int is not None else station_id).values('station_id', 's_name', 'admin_id').first()
+                            station_assignment['station'] = st
+                        except Exception:
+                            station_assignment['station'] = None
                     else:
                         # determine reason without selecting all station columns
-                        exists = Station.objects.filter(station_id=station_id).exists()
+                        exists = Station.objects.filter(station_id=station_id_int if station_id_int is not None else station_id).exists()
                         station_assignment['reason'] = 'station not found' if not exists else 'station already has admin'
                 except Exception:
                     logger.exception('Failed to assign station admin for station_id=%s', station_id)
                     station_assignment['reason'] = 'assignment error'
 
         resp_body = {
-            "message": "Usuario creado correctamente",
+                "message": "Usuario registrado exitosamente, espere a que el administrador lo valide",
             "user_id": user.id
         }
         # include station assignment info when applicable

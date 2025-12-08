@@ -15,12 +15,13 @@ import { useEffect } from 'react';
 import { applyInstitutionTheme, clearInstitutionTheme, loadInstitutionThemeFromStorage, paletteFromColorSet } from './lib/theme';
 import { AdminInstitutions } from './components/AdminInstitutions';
 import { StationManagement } from './components/StationManagement';
+import { StationCreate } from './components/StationCreate';
 import { Reports } from './components/Reports';
 import { Button } from './components/ui/button';
 import { Avatar, AvatarFallback } from './components/ui/avatar';
 import { UserManagement } from './components/UserManagement';
 
-type View = 'dashboard' | 'institutions' | 'stations' | 'reports' | 'users';
+type View = 'dashboard' | 'institutions' | 'stations' | 'reports' | 'users' | 'create_station';
 type UserType = 'public' | 'institution' | 'admin' | null;
 interface UserInfo {
   user_id?: number;
@@ -141,6 +142,12 @@ export default function App() {
       label: 'Reportes Detallados',
       icon: FileText,
       roles: ['public', 'institution', 'admin'],
+    },
+    {
+      id: 'create_station' as View,
+      label: 'Crear Estación',
+      icon: Radio,
+      roles: ['admin'],
     },
   ];
 
@@ -368,6 +375,7 @@ export default function App() {
               {currentView === 'institutions' && userType === 'admin' && <AdminInstitutions />}
               {currentView === 'users' && userType === 'admin' && <UserManagement />}
               {currentView === 'stations' && (isStationAdmin || isInstitutionUser) && <StationManagement />}
+              {currentView === 'create_station' && userType === 'admin' && <StationCreate />}
               {currentView === 'reports' && <Reports />}
             </>
           )}

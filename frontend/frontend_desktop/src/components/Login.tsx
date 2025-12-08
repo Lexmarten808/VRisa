@@ -25,10 +25,11 @@ interface LoginProps {
 
 
 export function Login({ onLogin }: LoginProps) {
-  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+  const API_BASE = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:8000';
   const api = axios.create({ baseURL: API_BASE });
   const [isRegistering, setIsRegistering] = useState(false);
   const [regError, setRegError] = useState<string>('');
+  const [regSuccess, setRegSuccess] = useState<string>('');
   const [regLoading, setRegLoading] = useState(false);
   const [regMode, setRegMode] = useState<'user' | 'institution'>('user');
   const [loginLoading, setLoginLoading] = useState(false);
@@ -86,29 +87,24 @@ export function Login({ onLogin }: LoginProps) {
   const handleUserRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegError('');
+    setRegSuccess('');
     setRegLoading(true);
     const u_name = regFirstName.trim();
     const last_name = regLastName.trim();
     const email = regEmail.trim();
     const phone = regPhone.trim();
     const u_password = regPassword;
+    // send u_type expected by backend: 'regular' or 'station_admin'
     const u_type = regRole === 'ciudadano' ? 'regular' : 'station_admin';
     try {
-      await api.post('/api/users/register/', {
+      const resp = await api.post('/api/users/register/', {
         u_name, last_name, u_password, email, phone, u_type, station_id: regRole === 'administrador_estacion' ? regStationId.trim() : undefined
       });
-      // Auto-login right after successful registration
-      const loginResp = await api.post('/api/users/login/', {
-        identifier: email,
-        password: u_password
-      });
-      onLogin({
-        u_type: loginResp.data.u_type,
-        user_id: loginResp.data.user_id,
-        name: loginResp.data.name,
-        last_name: loginResp.data.last_name,
-        email
-      });
+      // show backend message instead of auto-login (user must be validated)
+      const message = resp?.data?.message || 'Usuario registrado correctamente, espere validación';
+      setRegSuccess(message + (resp?.data?.station_assignment ? ` — ${resp.data.station_assignment.assigned ? 'Estación asociada' : resp.data.station_assignment.reason}` : ''));
+      // clear form (keep user on registration view so they see the message)
+      setRegFirstName(''); setRegLastName(''); setRegEmail(''); setRegPhone(''); setRegPassword(''); setRegStationId('');
     } catch (error: any) {
       const msg = error?.response?.data?.error || 'No se pudo crear la cuenta';
       setRegError(msg);
@@ -269,6 +265,11 @@ export function Login({ onLogin }: LoginProps) {
               {regError && (
                 <Alert variant="destructive" className="mb-4">
                   <AlertDescription>{regError}</AlertDescription>
+                </Alert>
+              )}
+              {regSuccess && (
+                <Alert className="mb-4">
+                  <AlertDescription>{regSuccess}</AlertDescription>
                 </Alert>
               )}
               {regMode === 'user' ? (
