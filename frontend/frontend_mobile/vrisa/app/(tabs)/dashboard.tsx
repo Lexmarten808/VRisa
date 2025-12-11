@@ -1,12 +1,30 @@
-import React from 'react';
-import { ScrollView, View, Text, StyleSheet, Dimensions } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
 import { Card } from '../../components/ui/Card';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { airQualityData } from '../../lib/mockData';
+import auth from '../../lib/auth';
+import { useRouter } from 'expo-router';
 import { theme, statusPalette } from '../../lib/theme';
 import { LineChart } from 'react-native-chart-kit';
 
 export default function DashboardScreen(){
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(()=>{
+    let mounted = true;
+    (async ()=>{
+      const u = await auth.getUser();
+      if(mounted) setUser(u);
+    })();
+    return ()=>{ mounted = false; };
+  },[]);
+
+  async function handleLogout(){
+    await auth.clearUser();
+    router.replace('/');
+  }
   const chartData = {
     labels: airQualityData.map(d=>d.pollutant),
     datasets: [
@@ -20,7 +38,15 @@ export default function DashboardScreen(){
   };
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.inner}>
-      <Text style={styles.title}>Resumen de Calidad del Aire</Text>
+      <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+        <Text style={styles.title}>Resumen de Calidad del Aire</Text>
+        {user ? (
+          <View style={{ alignItems:'flex-end' }}>
+            <Text style={{ fontSize:12 }}>{user.name} {user.last_name || ''}</Text>
+            <TouchableOpacity onPress={handleLogout} style={{ marginTop:6 }}><Text style={{ color:'#0d6efd' }}>Cerrar sesión</Text></TouchableOpacity>
+          </View>
+        ) : null}
+      </View>
       <View style={styles.cardsRow}>
         {airQualityData.map(item => (
           <Card key={item.pollutant} style={{ width: '46%', borderColor: statusColors[item.status] }}>

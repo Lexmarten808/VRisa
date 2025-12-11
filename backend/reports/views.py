@@ -26,6 +26,7 @@ class AirQualityReportView(APIView):
         station_id = request.query_params.get('station_id')
         start = request.query_params.get('start_date')
         end = request.query_params.get('end_date')
+        days_param = request.query_params.get('days')
 
         try:
             if end:
@@ -35,15 +36,19 @@ class AirQualityReportView(APIView):
         except Exception:
             end_dt = datetime.utcnow()
 
-        try:
-            if start:
-                start_dt = parse_datetime(start) or datetime.fromisoformat(start)
-            else:
+        # If client explicitly requested all data, do not apply a time window
+        if days_param == 'all':
+            qs = Measurement.objects.all()
+        else:
+            try:
+                if start:
+                    start_dt = parse_datetime(start) or datetime.fromisoformat(start)
+                else:
+                    start_dt = end_dt - timedelta(hours=24)
+            except Exception:
                 start_dt = end_dt - timedelta(hours=24)
-        except Exception:
-            start_dt = end_dt - timedelta(hours=24)
 
-        qs = Measurement.objects.filter(m_date__gte=start_dt, m_date__lte=end_dt)
+            qs = Measurement.objects.filter(m_date__gte=start_dt, m_date__lte=end_dt)
         if station_id:
             qs = qs.filter(sensor__station__station_id=station_id)
 
@@ -92,12 +97,16 @@ class TrendsReportView(APIView):
     def get(self, request):
         variable = request.query_params.get('variable')  # accept id or code/name
         station_id = request.query_params.get('station_id')
-        range_days = int(request.query_params.get('days') or 7)
+        days_param = request.query_params.get('days')
 
         end_dt = datetime.utcnow()
-        start_dt = end_dt - timedelta(days=range_days)
-
-        qs = Measurement.objects.filter(m_date__gte=start_dt, m_date__lte=end_dt)
+        # If client requested all data, do not constrain by dates
+        if days_param == 'all':
+            qs = Measurement.objects.all()
+        else:
+            range_days = int(days_param or 7)
+            start_dt = end_dt - timedelta(days=range_days)
+            qs = Measurement.objects.filter(m_date__gte=start_dt, m_date__lte=end_dt)
         if variable:
             try:
                 # try numeric id
@@ -132,12 +141,16 @@ class AlertsReportView(APIView):
     def get(self, request):
         variable = request.query_params.get('variable')
         station_id = request.query_params.get('station_id')
-        days = int(request.query_params.get('days') or 7)
+        days_param = request.query_params.get('days')
 
         end_dt = datetime.utcnow()
-        start_dt = end_dt - timedelta(days=days)
-
-        qs = Measurement.objects.filter(m_date__gte=start_dt, m_date__lte=end_dt)
+        # support requesting all data via days='all'
+        if days_param == 'all':
+            qs = Measurement.objects.all()
+        else:
+            days = int(days_param or 7)
+            start_dt = end_dt - timedelta(days=days)
+            qs = Measurement.objects.filter(m_date__gte=start_dt, m_date__lte=end_dt)
         if variable:
             try:
                 vid = int(variable)
@@ -158,8 +171,13 @@ class AlertsReportView(APIView):
                 threshold_cfg = THRESHOLDS.get(variable.replace(' ', '').upper()) or THRESHOLDS.get(variable.upper())
 
         if threshold_cfg:
-            for m in qs.order_by('m_date'):
-                val = float(m.m_value)
+            # Use values() to avoid fetching related Station model instances
+            # (which can trigger DB queries that reference missing columns).
+            for m in qs.order_by('m_date').values('m_date', 'm_value', 'sensor__station__s_name', 'variable__v_name', 'variable__v_id'):
+                try:
+                    val = float(m.get('m_value') or 0)
+                except Exception:
+                    continue
                 sev = None
                 if val >= threshold_cfg.get('critical'):
                     sev = 'critical'
@@ -168,7 +186,14 @@ class AlertsReportView(APIView):
                 elif val >= threshold_cfg.get('info'):
                     sev = 'info'
                 if sev:
-                    alerts.append({'datetime': m.m_date, 'value': val, 'station': getattr(m.sensor.station, 's_name', None), 'severity': sev})
+                    alerts.append({
+                        'datetime': m.get('m_date'),
+                        'value': val,
+                        'station': m.get('sensor__station__s_name'),
+                        'severity': sev,
+                        'variable': m.get('variable__v_name'),
+                        'variable_id': m.get('variable__v_id')
+                    })
             return Response({'mode': 'thresholds', 'thresholds': threshold_cfg, 'alerts': alerts})
 
         # fallback statistical
@@ -182,9 +207,21 @@ class AlertsReportView(APIView):
         stdev = statistics.pstdev(values) if len(values) > 1 else 0
         threshold = mean + 2 * stdev
 
-        for m in qs.order_by('m_date'):
-            if float(m.m_value) > threshold:
-                alerts.append({'datetime': m.m_date, 'value': float(m.m_value), 'station': getattr(m.sensor.station, 's_name', None), 'severity': 'statistical'})
+        for m in qs.order_by('m_date').values('m_date', 'm_value', 'sensor__station__s_name', 'variable__v_name', 'variable__v_id'):
+            try:
+                mv = float(m.get('m_value') or 0)
+            except Exception:
+                continue
+            # Include values equal to the threshold
+            if mv >= threshold:
+                alerts.append({
+                    'datetime': m.get('m_date'),
+                    'value': mv,
+                    'station': m.get('sensor__station__s_name'),
+                    'severity': 'statistical',
+                    'variable': m.get('variable__v_name'),
+                    'variable_id': m.get('variable__v_id')
+                })
 
         return Response({'mode': 'statistical', 'threshold': threshold, 'alerts': alerts})
 

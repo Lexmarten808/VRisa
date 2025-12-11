@@ -17,9 +17,7 @@ export default function TabsLayout(){
     >
       <Tabs.Screen name="dashboard" options={{ title: 'Dashboard', tabBarIcon: ({focused}) => <Ionicons name="speedometer-outline" size={iconSize} color={iconColor(focused)} /> }} />
       <Tabs.Screen name="map" options={{ title: 'Mapa', tabBarIcon: ({focused}) => <Ionicons name="map-outline" size={iconSize} color={iconColor(focused)} /> }} />
-      <Tabs.Screen name="stations" options={{ title: 'Estaciones', tabBarIcon: ({focused}) => <MaterialCommunityIcons name="factory" size={iconSize} color={iconColor(focused)} /> }} />
       <Tabs.Screen name="reports" options={{ title: 'Reportes', tabBarIcon: ({focused}) => <Ionicons name="document-text-outline" size={iconSize} color={iconColor(focused)} /> }} />
-      <Tabs.Screen name="institutions" options={{ title: 'Instituciones', tabBarIcon: ({focused}) => <Ionicons name="business-outline" size={iconSize} color={iconColor(focused)} /> }} />
     </Tabs>
   );
 }

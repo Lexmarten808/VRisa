@@ -1,11 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import {
-  Wind,
-  Droplets,
-  Thermometer,
-  AlertCircle,
-  Download,
-} from 'lucide-react';
+import { AlertCircle, Download } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -21,7 +15,6 @@ export function Dashboard() {
   const [selectedStation, setSelectedStation] = useState<any>(null);
   const [stations, setStations] = useState<any[]>([]);
   const [airQualityData, setAirQualityData] = useState<any[]>([]);
-  const [weatherData, setWeatherData] = useState<any>({ temperature: null, humidity: null, windSpeed: null, windDirection: null });
   const [variablesMap, setVariablesMap] = useState<Record<string,string>>({});
   const [alerts, setAlerts] = useState<any[]>([]);
   const [alertsLoading, setAlertsLoading] = useState<boolean>(false);
@@ -146,7 +139,6 @@ export function Dashboard() {
 
           // Aggregate measurements by variable id to compute averages (promedio general)
           const sums: Record<string, { sum: number; count: number; name?: string; unit?: string; latestDate?: string }> = {};
-          const weatherLatest: Record<string, { m_date: string; value: number }> = {};
           for (const m of measurements) {
             const rawVar = m.variable || m.variable_id;
             let varId = '';
@@ -167,17 +159,7 @@ export function Dashboard() {
             sums[varId].count += 1;
             if (!sums[varId].latestDate || new Date(md) > new Date(sums[varId].latestDate || 0)) sums[varId].latestDate = md;
 
-            // detect weather codes
             const code = normalizeCode(varName).replace('PM2,5','PM25').replace('PM2.5','PM25');
-            if (['TEMPERATURE','TEMPERATURA'].includes(code)) {
-              if (!weatherLatest.temperature || new Date(md) > new Date(weatherLatest.temperature.m_date)) weatherLatest['temperature'] = { m_date: md, value: val };
-            }
-            if (['HUMIDITY','HUMEDAD'].includes(code)) {
-              if (!weatherLatest.humidity || new Date(md) > new Date(weatherLatest.humidity.m_date)) weatherLatest['humidity'] = { m_date: md, value: val };
-            }
-            if (['WINDSPEED','VELOCIDADVIENTO','WINDSPD','WIND_SPEED'].includes(code)) {
-              if (!weatherLatest.windSpeed || new Date(md) > new Date(weatherLatest.windSpeed.m_date)) weatherLatest['windSpeed'] = { m_date: md, value: val };
-            }
           }
 
           const aq = Object.keys(sums).map((id) => {
@@ -194,13 +176,7 @@ export function Dashboard() {
             return { pollutant: name, pollutant_id: id, value: Number(avg.toFixed(2)), unit: s.unit || '', limit, status };
           });
           setAirQualityData(aq);
-          // Set weatherData from detected latest weather measurements (fallback to mock values)
-          setWeatherData((prev: any) => ({
-            temperature: weatherLatest.temperature ? weatherLatest.temperature.value : prev.temperature,
-            humidity: weatherLatest.humidity ? weatherLatest.humidity.value : prev.humidity,
-            windSpeed: weatherLatest.windSpeed ? weatherLatest.windSpeed.value : prev.windSpeed,
-            windDirection: prev.windDirection, // keep existing or mock; direction removed from UI
-          }));
+          // Condiciones meteorológicas: eliminado por solicitud del usuario
           // For historical, attempt to group by day/time for PM25 as example
           const hist24: any[] = measurements.slice(-24).map((m: any) => ({ time: new Date(m.m_date).toLocaleTimeString(), PM25: Number(m.m_value) }));
           // historical data / charts removed - no-op
@@ -321,44 +297,7 @@ export function Dashboard() {
         ))}
       </div>
 
-      {/* Datos Meteorológicos */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Condiciones Meteorológicas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-orange-100 rounded-lg">
-                <Thermometer className="h-6 w-6 text-orange-600" />
-              </div>
-              <div>
-                <div className="text-sm text-gray-600">Temperatura</div>
-                <div className="text-xl">{weatherData.temperature}°C</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <Droplets className="h-6 w-6 text-blue-600" />
-              </div>
-              <div>
-                <div className="text-sm text-gray-600">Humedad</div>
-                <div className="text-xl">{weatherData.humidity}%</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-green-100 rounded-lg">
-                <Wind className="h-6 w-6 text-green-600" />
-              </div>
-              <div>
-                <div className="text-sm text-gray-600">Velocidad del Viento</div>
-                <div className="text-xl">{weatherData.windSpeed} km/h</div>
-              </div>
-            </div>
-            {/* Direccion removed - show only temperature, humidity and wind speed */}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Condiciones meteorológicas eliminadas */}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Mapa Interactivo */}

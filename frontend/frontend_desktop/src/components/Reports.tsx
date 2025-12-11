@@ -168,6 +168,34 @@ export function Reports() {
   const API_BASE = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:8000';
   const api = axios.create({ baseURL: API_BASE });
 
+  // Fetch all measurements, following pagination (DRF-style) to avoid missing points
+  const fetchAllMeasurements = async (params: any = {}) => {
+    const all: any[] = [];
+    try {
+      const resp = await api.get('/api/measurements/', { params });
+      const data = resp.data;
+      if (Array.isArray(data)) all.push(...data);
+      else if (data?.results) all.push(...data.results);
+
+      let next = data?.next;
+      while (next) {
+        try {
+          const nextResp = await axios.get(next, { baseURL: API_BASE });
+          const nd = nextResp.data;
+          if (Array.isArray(nd)) all.push(...nd);
+          else if (nd?.results) all.push(...nd.results);
+          next = nd?.next;
+        } catch (err) {
+          console.warn('Error following pagination next link', err);
+          break;
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching measurements', err);
+    }
+    return all;
+  };
+
   // Known contaminant codes we care about
   const CONTAMINANT_CODES = ['PM25', 'PM10', 'O3', 'NO2', 'SO2', 'CO'];
 
@@ -177,17 +205,16 @@ export function Reports() {
     (async () => {
       try {
         // Fetch stations, sensors, variables and measurements in a defined order
-        const [sresp, sresp2, vresp, mresp] = await Promise.all([
+        const [sresp, sresp2, vresp] = await Promise.all([
           api.get('/api/stations/'),
           api.get('/api/sensors/'),
           api.get('/api/variables/'),
-          api.get('/api/measurements/'),
         ]);
 
         const stationsList = Array.isArray(sresp.data) ? sresp.data : (sresp.data?.results ?? []);
         const sensorsList = Array.isArray(sresp2.data) ? sresp2.data : (sresp2.data?.results ?? []);
         const vars = Array.isArray(vresp.data) ? vresp.data : (vresp.data?.results ?? []);
-        const measurements = Array.isArray(mresp.data) ? mresp.data : (mresp.data?.results ?? []);
+        const measurements = await fetchAllMeasurements();
 
         if (stationsList.length) setStations(stationsList);
         if (sensorsList.length) setSensors(sensorsList);
@@ -337,16 +364,11 @@ export function Reports() {
         // ignore trends-series summary computation errors
       }
       const params: any = {};
-      if (selectedStation !== 'all') params.station_id = selectedStation;
-      // quick map time range to start/end
-      const now = new Date();
-      // Only set start_date when a finite recent window is requested; if 'all' is selected omit it
-      if (selectedTimeRange === '24h') params.start_date = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
-      if (selectedTimeRange === '7d') params.start_date = new Date(now.getTime() - 7 * 24 * 3600 * 1000).toISOString();
-      if (selectedTimeRange === '30d') params.start_date = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString();
-      // if selectedTimeRange === 'all' -> do not set start_date so backend may return all data
+      // map time range to start/end or use days='all' to request full history
+      params.days = selectedTimeRange === 'all' ? 'all' : (selectedTimeRange === '24h' ? 1 : selectedTimeRange === '7d' ? 7 : 30);
 
       const resp = await api.get('/api/reports/air_quality/', { params });
+      console.debug('reports.air_quality resp', { params, data: resp.data });
       const summary = resp.data?.summary ?? [];
       const hotspots = resp.data?.hotspots ?? [];
       const heat = resp.data?.heatmap ?? [];
@@ -399,8 +421,7 @@ export function Reports() {
       // If the backend returned no summary, try to compute it from raw measurements
       if (!mappedSummary.length) {
         try {
-          const mresp = await api.get('/api/measurements/', { params });
-          const measurements = Array.isArray(mresp.data) ? mresp.data : (mresp.data?.results ?? []);
+          const measurements = await fetchAllMeasurements(params);
           // ensure variable maps exist
           if (!Object.keys(vmapState).length) {
             const vresp2 = await api.get('/api/variables/');
@@ -492,7 +513,7 @@ export function Reports() {
       // Compute summary statistics (avg / max / min / compliance) for the selected pollutant using measurements
       try {
         const mparams: any = {};
-        if (selectedStation !== 'all') mparams.station_id = selectedStation;
+        // Do not restrict measurements by station when computing alerts; only use time window and variable
         if (selectedTimeRange !== 'all') {
           const now = new Date();
           if (selectedTimeRange === '24h') mparams.start_date = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
@@ -506,8 +527,7 @@ export function Reports() {
         // Otherwise do NOT send the raw selectedPollutant string as `variable` (backend may ignore it or return unrelated data).
         if (codeToId[selectedPollutant]) mparams.variable = codeToId[selectedPollutant];
 
-        const mresp2 = await api.get('/api/measurements/', { params: mparams });
-        const measurementsForStats = Array.isArray(mresp2.data) ? mresp2.data : (mresp2.data?.results ?? []);
+        const measurementsForStats = await fetchAllMeasurements(mparams);
 
         // Ensure we only compute stats for the selected pollutant code. If backend didn't filter (because we couldn't
         // resolve to an id), filter client-side by resolving each measurement's variable code using vcodeState or name normalization.
@@ -634,11 +654,12 @@ export function Reports() {
 
       // For 'all' don't pass a `days` filter so backend may return full history
       const params: any = {};
-      if (selectedTimeRange !== 'all') params.days = selectedTimeRange === '24h' ? 1 : selectedTimeRange === '7d' ? 7 : 30;
+      params.days = selectedTimeRange === 'all' ? 'all' : (selectedTimeRange === '24h' ? 1 : selectedTimeRange === '7d' ? 7 : 30);
       params.variable = variableParam;
       if (selectedStation !== 'all') params.station_id = selectedStation;
 
       const resp = await api.get('/api/reports/trends/', { params });
+      console.debug('reports.trends resp', { params, series: resp.data?.series });
       const series = resp.data?.series ?? [];
       // normalize into historicalData expected shape using selectedPollutant as key (so charts keep same key)
       let seriesData = series.map((s: any) => {
@@ -690,11 +711,10 @@ export function Reports() {
       if (!seriesData.length) {
         try {
           // backend returned empty series; attempting fallback aggregation from /api/measurements/
-          const mresp = await api.get('/api/measurements/');
-          const measurements = Array.isArray(mresp.data) ? mresp.data : (mresp.data?.results ?? []);
+          const measurements = await fetchAllMeasurements();
           const now = new Date();
-          const days = selectedTimeRange === '24h' ? 1 : selectedTimeRange === '7d' ? 7 : 30;
-          const start = new Date(now.getTime() - days * 24 * 3600 * 1000);
+          const days = selectedTimeRange === '24h' ? 1 : selectedTimeRange === '7d' ? 7 : (selectedTimeRange === '30d' ? 30 : 0);
+          const start = days ? new Date(now.getTime() - days * 24 * 3600 * 1000) : null;
 
           // build reverse map code -> id once
           const codeToId: Record<string,string> = {};
@@ -706,7 +726,7 @@ export function Reports() {
             const md = new Date(m.m_date || m.date || m.datetime);
             if (isNaN(md.getTime())) return false;
               // If selectedTimeRange is 'all', we don't filter by start date
-              if (selectedTimeRange !== 'all' && md < start) return false;
+              if (selectedTimeRange !== 'all' && start && md < start) return false;
             // variable match
             let vid = '';
             if (m.variable && typeof m.variable === 'object') vid = String(m.variable.v_id ?? m.variable.id ?? '');
@@ -780,12 +800,24 @@ export function Reports() {
     try {
       // Fetch backend alerts
       const params: any = {};
-      if (selectedTimeRange !== 'all') params.days = selectedTimeRange === '24h' ? 1 : selectedTimeRange === '7d' ? 7 : 30;
+      params.days = selectedTimeRange === 'all' ? 'all' : (selectedTimeRange === '24h' ? 1 : selectedTimeRange === '7d' ? 7 : 30);
       if (selectedStation !== 'all') params.station_id = selectedStation;
       // Ask backend for alerts for the selected pollutant when possible
       params.variable = selectedPollutant;
       const resp = await api.get('/api/reports/alerts/', { params });
-      const backendAlerts = resp.data?.alerts ?? [];
+      console.debug('reports.alerts resp', { params, data: resp.data });
+      let backendAlerts = resp.data?.alerts ?? [];
+      // Defensive: ensure backend alerts respect the requested days window
+      const startDateForAlerts = params.days ? new Date(Date.now() - (params.days * 24 * 3600 * 1000)) : null;
+      if (startDateForAlerts) {
+        backendAlerts = backendAlerts.filter((a: any) => {
+          const dt = a.datetime || a.date || a.time || null;
+          if (!dt) return false;
+          const parsed = new Date(dt);
+          if (isNaN(parsed.getTime())) return false;
+          return parsed >= startDateForAlerts;
+        });
+      }
 
       // Additionally compute alerts client-side from recent measurements that exceed limits
       try {
@@ -803,8 +835,15 @@ export function Reports() {
         for (const [id, code] of Object.entries(vcodeState)) codeToId[code] = id;
         if (codeToId[selectedPollutant]) mparams.variable = codeToId[selectedPollutant];
 
-        const mresp = await api.get('/api/measurements/', { params: mparams });
-        const measurements = Array.isArray(mresp.data) ? mresp.data : (mresp.data?.results ?? []);
+        const measurementsRaw = await fetchAllMeasurements(mparams);
+        console.debug('reports.alerts measurements fetched', { mparams, count: measurementsRaw.length });
+        // Defensive client-side filter: only keep measurements inside the requested window
+        const startDate = mparams.start_date ? new Date(mparams.start_date) : null;
+        const measurements = startDate ? measurementsRaw.filter((m: any) => {
+          const md = new Date(m.m_date || m.date || m.datetime);
+          if (isNaN(md.getTime())) return false;
+          return md >= startDate;
+        }) : measurementsRaw;
 
         // Build set of existing alert keys to dedupe (station|datetime|variable|value)
         const existingKeys = new Set<string>();
@@ -1178,17 +1217,17 @@ export function Reports() {
             <CardTitle className="text-sm text-gray-600">Máximo</CardTitle>
           </CardHeader>
           <CardContent>
-            {/** Primary: show series max if available, otherwise measurements, otherwise generic summaryMax */}
-            {((summaryMaxSeries != null) || (summaryMaxMeasurements != null) || (summaryMax != null)) ? (
+            {/** Primary: prefer raw measurement max, otherwise series max, otherwise generic summaryMax */}
+            {((summaryMaxMeasurements != null) || (summaryMaxSeries != null) || (summaryMax != null)) ? (
               <> 
                 <div className="text-2xl text-orange-600">
-                  {summaryMaxSeries != null ? `${formatNumber(summaryMaxSeries, getDecimalsForUnitOrCode(pollutantUnit, selectedPollutant))} ${pollutantUnit}` : (summaryMaxMeasurements != null ? `${formatNumber(summaryMaxMeasurements, getDecimalsForUnitOrCode(pollutantUnit, selectedPollutant))} ${pollutantUnit}` : `${formatNumber(summaryMax, getDecimalsForUnitOrCode(pollutantUnit, selectedPollutant))} ${pollutantUnit}`)}
+                  {summaryMaxMeasurements != null ? `${formatNumber(summaryMaxMeasurements, getDecimalsForUnitOrCode(pollutantUnit, selectedPollutant))} ${pollutantUnit}` : (summaryMaxSeries != null ? `${formatNumber(summaryMaxSeries, getDecimalsForUnitOrCode(pollutantUnit, selectedPollutant))} ${pollutantUnit}` : `${formatNumber(summaryMax, getDecimalsForUnitOrCode(pollutantUnit, selectedPollutant))} ${pollutantUnit}`)}
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  {summaryMaxSeries != null ? (summaryMaxSeriesDate ? new Date(summaryMaxSeriesDate).toLocaleString() : 'Serie') : (summaryMaxMeasurementsDate ? new Date(summaryMaxMeasurementsDate).toLocaleString() : 'Mediciones')}
+                  {summaryMaxMeasurements != null ? (summaryMaxMeasurementsDate ? new Date(summaryMaxMeasurementsDate).toLocaleString() : 'Mediciones') : (summaryMaxSeriesDate ? (summaryMaxSeriesDate ? new Date(summaryMaxSeriesDate).toLocaleString() : 'Serie') : 'Mediciones')}
                 </p>
                 {summaryMaxSeries != null && summaryMaxMeasurements != null && Math.abs((summaryMaxSeries || 0) - (summaryMaxMeasurements || 0)) > 1e-6 && (
-                  <p className="text-xs text-gray-400 mt-1">Mediciones: {`${formatNumber(summaryMaxMeasurements, getDecimalsForUnitOrCode(pollutantUnit, selectedPollutant))} ${pollutantUnit}`}</p>
+                  <p className="text-xs text-gray-400 mt-1">Serie (promedio horario): {`${formatNumber(summaryMaxSeries, getDecimalsForUnitOrCode(pollutantUnit, selectedPollutant))} ${pollutantUnit}`}</p>
                 )}
               </>
             ) : (
@@ -1270,7 +1309,9 @@ export function Reports() {
                   ? 'Últimas 24 horas'
                   : selectedTimeRange === '7d'
                   ? 'Últimos 7 días'
-                  : 'Últimos 30 días'}
+                  : selectedTimeRange === '30d'
+                  ? 'Últimos 30 días'
+                  : 'Todos los datos'}
               </Badge>
               {selectedStation !== 'all' && (
                 <Badge variant="outline">
@@ -1312,8 +1353,8 @@ export function Reports() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Estado por Contaminante</CardTitle>
-          </CardHeader>
+              <CardTitle>Estado por variable medida</CardTitle>
+            </CardHeader>
           <CardContent>
             {airQualityLoading ? (
               <div className="py-8 text-center text-sm text-gray-500">Cargando estado por contaminante...</div>

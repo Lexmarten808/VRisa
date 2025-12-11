@@ -51,6 +51,9 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
+# During local development, allow all origins to simplify testing from Expo/web
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',

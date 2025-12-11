@@ -15,9 +15,7 @@
     "app/**/*",
     "components/**/*",
     "lib/**/*",
-    "src/**/*",
-    "expo-env.d.ts",
-    ".expo/types/**/*.ts"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules"
